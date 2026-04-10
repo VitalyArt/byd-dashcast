@@ -66,14 +66,18 @@ public class BYDDashboardActivity extends AppCompatActivity {
     }
 
     private void initDevices() {
-        // Les permissions COMMON ont été accordées dans MainActivity.
-        // getInstance() retourne null si elles ne l'ont pas été → affichage "--".
-        boolean speedPermsGranted = ContextCompat.checkSelfPermission(this,
-                "android.permission.BYDAUTO_SPEED_COMMON") == PackageManager.PERMISSION_GRANTED;
-
-        if (speedPermsGranted) {
-            mSpeedDevice   = BYDAutoSpeedDevice.getInstance(this);
-            mEnergyDevice  = BYDAutoEnergyDevice.getInstance(this);
+        // Chaque permission COMMON est vérifiée indépendamment avant son getInstance().
+        // getInstance() retourne null si la permission n'est pas accordée → affichage "--".
+        if (ContextCompat.checkSelfPermission(this,
+                "android.permission.BYDAUTO_SPEED_COMMON") == PackageManager.PERMISSION_GRANTED) {
+            mSpeedDevice = BYDAutoSpeedDevice.getInstance(this);
+        }
+        if (ContextCompat.checkSelfPermission(this,
+                "android.permission.BYDAUTO_ENERGY_COMMON") == PackageManager.PERMISSION_GRANTED) {
+            mEnergyDevice = BYDAutoEnergyDevice.getInstance(this);
+        }
+        if (ContextCompat.checkSelfPermission(this,
+                "android.permission.BYDAUTO_GEARBOX_COMMON") == PackageManager.PERMISSION_GRANTED) {
             mGearboxDevice = BYDAutoGearboxDevice.getInstance(this);
         }
     }

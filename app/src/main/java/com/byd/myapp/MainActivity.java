@@ -9,6 +9,8 @@ import android.content.pm.ResolveInfo;
 import com.byd.myapp.AppLogger;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -62,6 +64,14 @@ public class MainActivity extends AppCompatActivity
     private TextView     tvControlAppName;
     private FrameLayout  clusterTouchpad;
 
+    private static final int REQ_COMMON_PERMS = 43;
+    private static final String[] COMMON_PERMS = {
+        "android.permission.BYDAUTO_SPEED_COMMON",
+        "android.permission.BYDAUTO_ENERGY_COMMON",
+        "android.permission.BYDAUTO_GEARBOX_COMMON",
+        "android.permission.BYDAUTO_BODYWORK_COMMON"
+    };
+
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(LocaleHelper.applyLocale(base));
@@ -71,6 +81,19 @@ public class MainActivity extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Demander les permissions COMMON au démarrage (obligatoire sur ROM BYD)
+        // afin qu'elles soient déjà accordées quand BYDDashboardActivity / BYDLiveActivity démarrent.
+        boolean allGranted = true;
+        for (String perm : COMMON_PERMS) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                allGranted = false;
+                break;
+            }
+        }
+        if (!allGranted) {
+            ActivityCompat.requestPermissions(this, COMMON_PERMS, REQ_COMMON_PERMS);
+        }
 
         tvDashboardStatus = (TextView)    findViewById(R.id.tv_dashboard_status);
         btnRestoreByd     = (Button)      findViewById(R.id.btn_restore_byd);

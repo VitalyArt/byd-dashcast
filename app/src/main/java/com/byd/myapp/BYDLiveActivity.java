@@ -6,6 +6,7 @@ import android.hardware.bydauto.gearbox.BYDAutoGearboxDevice;
 import android.hardware.bydauto.speed.BYDAutoSpeedDevice;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.view.View;
@@ -49,6 +50,13 @@ public class BYDLiveActivity extends AppCompatActivity {
         super.attachBaseContext(LocaleHelper.applyLocale(base));
     }
 
+    private static final int REQ_COMMON_PERMS = 42;
+    private static final String[] COMMON_PERMS = {
+        "android.permission.BYDAUTO_SPEED_COMMON",
+        "android.permission.BYDAUTO_ENERGY_COMMON",
+        "android.permission.BYDAUTO_GEARBOX_COMMON"
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -77,7 +85,28 @@ public class BYDLiveActivity extends AppCompatActivity {
                     }
                 });
 
-        initDevices();
+        // Demander les permissions COMMON dynamiquement (obligatoire sur ROM BYD)
+        // avant d'appeler getInstance() — même comportement que le sample HelloWorld BYD.
+        boolean allGranted = true;
+        for (String perm : COMMON_PERMS) {
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                allGranted = false;
+                break;
+            }
+        }
+        if (allGranted) {
+            initDevices();
+        } else {
+            ActivityCompat.requestPermissions(this, COMMON_PERMS, REQ_COMMON_PERMS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+            String[] permissions, int[] grantResults) {
+        if (requestCode == REQ_COMMON_PERMS) {
+            initDevices(); // réessaye — null si toujours refusé
+        }
     }
 
     @Override
