@@ -19,12 +19,16 @@ import android.widget.Button;
 public class WelcomeActivity extends AppCompatActivity {
 
     @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(LocaleHelper.applyLocale(base));
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Si déjà configuré → aller directement à MainActivity
         if (LocaleHelper.isSetupDone(this)) {
-            LocaleHelper.applyLocale(this);
             startMainActivity();
             return;
         }

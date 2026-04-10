@@ -108,8 +108,8 @@ public class ClusterInputForwarder {
         if (!mAvailable) return;
         long now = SystemClock.uptimeMillis();
         try {
-            KeyEvent down = new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0);
-            KeyEvent up   = new KeyEvent(now, now, KeyEvent.ACTION_UP,   keyCode, 0);
+            KeyEvent down = new KeyEvent(now, now,     KeyEvent.ACTION_DOWN, keyCode, 0);
+            KeyEvent up   = new KeyEvent(now, now + 1, KeyEvent.ACTION_UP,   keyCode, 0);
             mInjectMethod.invoke(mInputManager, down, INJECT_INPUT_EVENT_MODE_ASYNC);
             mInjectMethod.invoke(mInputManager, up,   INJECT_INPUT_EVENT_MODE_ASYNC);
         } catch (Exception e) {

@@ -24,6 +24,9 @@ public class DashboardDisplayHelper {
     private final DisplayManager mDisplayManager;
     private final Listener mListener;
 
+    // ID du display cluster connu — -1 si non connecté
+    private int mKnownClusterDisplayId = -1;
+
     private final DisplayManager.DisplayListener mDisplayListener =
             new DisplayManager.DisplayListener() {
                 @Override
@@ -31,13 +34,17 @@ public class DashboardDisplayHelper {
                     Display d = mDisplayManager.getDisplay(displayId);
                     if (isPresentationDisplay(d)) {
                         Log.i(TAG, "Dashboard display connecté : id=" + displayId);
+                        mKnownClusterDisplayId = displayId;
                         mListener.onDashboardDisplayConnected(d, displayId);
                     }
                 }
 
                 @Override
                 public void onDisplayRemoved(int displayId) {
-                    Log.i(TAG, "Display supprimé : id=" + displayId);
+                    // Ne déclencher la déconnexion que si c'est bien le display cluster
+                    if (displayId != mKnownClusterDisplayId) return;
+                    Log.i(TAG, "Dashboard display supprimé : id=" + displayId);
+                    mKnownClusterDisplayId = -1;
                     mListener.onDashboardDisplayDisconnected();
                 }
 

@@ -263,6 +263,7 @@ public class MainActivity extends AppCompatActivity
     public void onSendToDashboard(AppInfo app) {
         if (!mDashboardLauncher.isDashboardAvailable()) {
             Toast.makeText(this, getString(R.string.toast_dashboard_unavailable), Toast.LENGTH_SHORT).show();
+            return;
         }
 
         boolean launched = mDashboardLauncher.launchOnDashboard(app.packageName);
