@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tap sur la ligne entière = envoyer sur le cluster -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="72dp"
+    android:layout_height="68dp"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:padding="8dp">
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:background="?android:attr/selectableItemBackground">
 
     <ImageView
         android:id="@+id/iv_app_icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginEnd="12dp"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_marginEnd="14dp"
         android:scaleType="fitCenter"/>
 
     <TextView
@@ -22,23 +29,13 @@
         android:ellipsize="end"
         android:singleLine="true"/>
 
-    <Button
-        android:id="@+id/btn_send_to_dash"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/btn_send_to_dash"
-        android:textSize="12sp"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"/>
-
-    <Button
-        android:id="@+id/btn_send_to_main"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/btn_send_to_main"
-        android:textSize="12sp"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:layout_marginStart="6dp"/>
+    <!-- Indicateur : app actuellement affichée sur le cluster -->
+    <View
+        android:id="@+id/view_active_indicator"
+        android:layout_width="5dp"
+        android:layout_height="32dp"
+        android:background="#4CAF50"
+        android:layout_marginStart="8dp"
+        android:visibility="gone"/>
 
 </LinearLayout>

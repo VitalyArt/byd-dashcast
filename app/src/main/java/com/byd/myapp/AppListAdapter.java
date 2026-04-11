@@ -4,7 +4,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -17,13 +16,13 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
 
     public interface OnSendToDashboardListener {
         void onSendToDashboard(AppInfo app);
-        void onSendToMain(AppInfo app);
+        void onSendToMain(AppInfo app); // gardé pour usage futur (panel de contrôle)
     }
 
     private List<AppInfo> mApps = new ArrayList<>();
     private final OnSendToDashboardListener mListener;
-    private boolean mDashboardAvailable = false;
-    private boolean mMainSendEnabled    = true;
+    // Package actuellement affiché sur le cluster (indicateur vert)
+    private String mCurrentPackage = null;
 
     public AppListAdapter(OnSendToDashboardListener listener) {
         mListener = listener;
@@ -34,13 +33,9 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
         notifyDataSetChanged();
     }
 
-    public void setDashboardAvailable(boolean available) {
-        mDashboardAvailable = available;
-        notifyDataSetChanged();
-    }
-
-    public void setMainSendEnabled(boolean enabled) {
-        mMainSendEnabled = enabled;
+    /** Met à jour l'indicateur de l'app actuellement sur le cluster. */
+    public void setCurrentPackage(String packageName) {
+        mCurrentPackage = packageName;
         notifyDataSetChanged();
     }
 
@@ -56,18 +51,16 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
         final AppInfo app = mApps.get(position);
         holder.ivIcon.setImageDrawable(app.icon);
         holder.tvName.setText(app.appName);
-        holder.btnSend.setEnabled(mDashboardAvailable);
-        holder.btnSend.setOnClickListener(new View.OnClickListener() {
+
+        // Indicateur vert : app actuellement sur le cluster
+        boolean isActive = app.packageName != null && app.packageName.equals(mCurrentPackage);
+        holder.viewActiveIndicator.setVisibility(isActive ? View.VISIBLE : View.GONE);
+
+        // Tap sur la ligne entière = envoyer sur le cluster
+        holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 mListener.onSendToDashboard(app);
-            }
-        });
-        holder.btnSendToMain.setEnabled(mMainSendEnabled);
-        holder.btnSendToMain.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mListener.onSendToMain(app);
             }
         });
     }
@@ -80,15 +73,13 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
     static class ViewHolder extends RecyclerView.ViewHolder {
         final ImageView ivIcon;
         final TextView  tvName;
-        final Button    btnSend;
-        final Button    btnSendToMain;
+        final View      viewActiveIndicator;
 
         ViewHolder(View itemView) {
             super(itemView);
-            ivIcon       = (ImageView) itemView.findViewById(R.id.iv_app_icon);
-            tvName       = (TextView)  itemView.findViewById(R.id.tv_app_name);
-            btnSend      = (Button)    itemView.findViewById(R.id.btn_send_to_dash);
-            btnSendToMain = (Button)   itemView.findViewById(R.id.btn_send_to_main);
+            ivIcon              = (ImageView) itemView.findViewById(R.id.iv_app_icon);
+            tvName              = (TextView)  itemView.findViewById(R.id.tv_app_name);
+            viewActiveIndicator = itemView.findViewById(R.id.view_active_indicator);
         }
     }
 }

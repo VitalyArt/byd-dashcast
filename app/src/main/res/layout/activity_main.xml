@@ -24,18 +24,6 @@
             android:textStyle="bold"/>
 
         <Button
-            android:id="@+id/btn_activate_cluster"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="🖥 Activer"
-            android:textSize="12sp"
-            android:backgroundTint="#1565C0"
-            android:textColor="#FFFFFF"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:layout_marginEnd="4dp"/>
-
-        <Button
             android:id="@+id/btn_restore_byd"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
@@ -45,45 +33,16 @@
             android:paddingStart="12dp"
             android:paddingEnd="12dp"/>
 
+        <!-- ⋮ : accès aux outils dev (Activer, Diag, Rapport, Langue, Live) -->
         <Button
-            android:id="@+id/btn_diag"
+            android:id="@+id/btn_overflow"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:text="⚙"
-            android:textSize="16sp"
+            android:text="⋮"
+            android:textSize="18sp"
             android:padding="0dp"
             android:layout_marginStart="8dp"
-            android:contentDescription="@string/btn_diag_desc"/>
-
-        <Button
-            android:id="@+id/btn_sysinfo"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:text="📋"
-            android:textSize="16sp"
-            android:padding="0dp"
-            android:layout_marginStart="4dp"
-            android:contentDescription="@string/btn_sysinfo_desc"/>
-
-        <Button
-            android:id="@+id/btn_language"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:text="🌐"
-            android:textSize="16sp"
-            android:padding="0dp"
-            android:layout_marginStart="4dp"
-            android:contentDescription="@string/btn_language_desc"/>
-
-        <Button
-            android:id="@+id/btn_live"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:text="📊"
-            android:textSize="16sp"
-            android:padding="0dp"
-            android:layout_marginStart="4dp"
-            android:contentDescription="@string/btn_live_desc"/>
+            android:contentDescription="Options"/>
     </LinearLayout>
 
     <!-- ===== TITRE LISTE ===== -->
