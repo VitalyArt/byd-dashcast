@@ -51,7 +51,8 @@ public class MainActivity extends AppCompatActivity
 
     // Service cluster
     private ClusterService          mClusterService;
-    private boolean                 mServiceBound = false;
+    private boolean                 mServiceBound    = false;
+    private boolean                 mBindRequested   = false; // vrai dès qu'un bindService est en cours
     private DashboardLauncher       mDashboardLauncher; // référence locale mise à jour après bind
     private ClusterInputForwarder   mClusterInputForwarder;
 
@@ -67,6 +68,7 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void onServiceDisconnected(ComponentName name) {
             mServiceBound   = false;
+            mBindRequested  = false; // autoriser un nouveau bindService si nécessaire
             mClusterService = null;
             AppLogger.log(TAG, "ClusterService déconnecté");
         }
@@ -186,11 +188,7 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        // Démarrer + binder au ClusterService (maintient la projection en background)
-        Intent svcIntent = new Intent(this, ClusterService.class);
-        startForegroundService(svcIntent);
-        bindService(svcIntent, mServiceConn, BIND_AUTO_CREATE);
-
+        // Démarrer le ClusterService maintenant (startForegroundService dans onStart)
         mDashboardLauncher     = new DashboardLauncher(this); // temporaire jusqu'au bind
         mClusterInputForwarder = new ClusterInputForwarder(this);
 
@@ -269,9 +267,15 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onStart() {
         super.onStart();
-        // Rebind au service si nécessaire (ex: rotation d'écran)
-        if (!mServiceBound) {
+        if (mServiceBound && mClusterService != null) {
+            // Activity revenue au premier plan : ré-attacher le listener
+            // (onStop l'avait mis à null pour éviter les leaks pendant le background)
+            mClusterService.setListener(this);
+        } else if (!mBindRequested) {
+            // Premier démarrage ou après onDestroy : lancer + binder le service
+            mBindRequested = true;
             Intent svcIntent = new Intent(this, ClusterService.class);
+            startForegroundService(svcIntent);
             bindService(svcIntent, mServiceConn, BIND_AUTO_CREATE);
         }
     }
@@ -290,7 +294,8 @@ public class MainActivity extends AppCompatActivity
         super.onDestroy();
         if (mServiceBound) {
             unbindService(mServiceConn);
-            mServiceBound = false;
+            mServiceBound  = false;
+            mBindRequested = false;
         }
     }
 
