@@ -723,7 +723,7 @@ public class AdbLocalClient {
                     dadb.shell("logcat -c 2>&1");
                     sb.append("\n-- am start-activity --windowingMode 5 --display 1 (FREEFORM) --\n");
                     AdbShellResponse rLaunch = dadb.shell(
-                        "am start-activity -S -W --windowingMode 5 --display 1"
+                        "am start-activity -W --windowingMode 5 --display 1"
                         + " -n com.byd.myapp/.dashboard.BYDDashboardActivity 2>&1");
                     sb.append(rLaunch.getAllOutput().trim()).append("\n");
                     dadb.shell("sleep 1");
