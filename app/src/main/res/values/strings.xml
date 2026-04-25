@@ -11,7 +11,7 @@
     <string name="status_disconnected">Dashboard : non connecté</string>
     <string name="title_app_list">Applications installées</string>
 
-    <!-- Panel contrôle cluster -->
+    <!-- Cluster control panel -->
     <string name="cluster_control_title">Contrôle cluster</string>
     <string name="cluster_control_hide">Masquer ▼</string>
     <string name="btn_cluster_back">← Retour</string>

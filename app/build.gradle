@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     signingConfigs {
-        // Signature BYD requise pour accéder aux APIs système bydauto
+        // BYD signature required to access bydauto system APIs
         bydPlatform {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
@@ -38,7 +38,7 @@ android {
 
     buildTypes {
         debug {
-            // La signature platform est obligatoire même en debug pour les permissions BYD
+            // Platform signature is mandatory even in debug builds for BYD permissions
             signingConfig signingConfigs.bydPlatform
         }
         release {
@@ -75,15 +75,15 @@ android {
     }
 }
 
-    // Pas de resolutionStrategy.force nécessaire avec ces versions API-29-compatibles.
+    // No resolutionStrategy.force needed with these API-29-compatible versions.
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    // Versions de l'ère Android 10 (API 29) — minCompileSdk ≤ 29
+    // Android 10 era versions (API 29) — minCompileSdk ≤ 29
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.recyclerview:recyclerview:1.1.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
 
-    // dadb — client ADB pur JVM (même bibliothèque utilisée par Overdrive)
+    // dadb — pure-JVM ADB client (same library used by Overdrive)
     implementation 'dev.mobile:dadb:1.2.7'
 }

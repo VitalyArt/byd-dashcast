@@ -10,18 +10,18 @@
     <!-- Connexion TCP localhost:5555 pour dadb (ADB local → popup autorisation) -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Overlay flottant pour le panneau de contrôle cluster (interaction sans quitter l'app) -->
+    <!-- Floating overlay for the cluster control panel (interaction without leaving the app) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
-    <!-- Injection d'événements input (requis pour piloter l'app cluster depuis l'écran principal)
-         C'est une signature permission — accordée grâce à la signature platform.keystore BYD -->
+    <!-- Input event injection (required to control the cluster app from the main screen)
+         This is a signature permission — granted by the BYD platform.keystore signature -->
     <uses-permission android:name="android.permission.INJECT_EVENTS"/>
 
     <!-- Miroir SurfaceControl — capturer le layer stack du cluster dans notre SurfaceView
-         Signature permission : accordée si notre cert == platform cert (cas ici avec platform.keystore) -->
+         Signature permission: granted when our cert == platform cert (the case here with platform.keystore) -->
     <uses-permission android:name="android.permission.ACCESS_SURFACE_FLINGER"/>
 
-    <!-- Carrosserie / Véhicule (COMMON = obligatoire en dynamique avant getInstance) -->
+    <!-- Body / Vehicle (COMMON = mandatory at runtime before getInstance) -->
     <uses-permission android:name="android.permission.BYDAUTO_BODYWORK_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_BODYWORK_GET"/>
 
@@ -34,10 +34,10 @@
     <uses-permission android:name="android.permission.BYDAUTO_SPEED_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_SPEED_GET"/>
 
-    <!-- Capteurs (luminosité, gyroscope…) -->
+    <!-- Sensors (brightness, gyroscope…) -->
     <uses-permission android:name="android.permission.BYDAUTO_SENSOR_GET"/>
 
-    <!-- Verrouillage des portes (nom réel sur DiLink 3.0 : DOOR_LOCK avec underscore) -->
+    <!-- Door lock (real name on DiLink 3.0: DOOR_LOCK with underscore) -->
     <uses-permission android:name="android.permission.BYDAUTO_DOOR_LOCK_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_DOOR_LOCK_GET"/>
     <uses-permission android:name="android.permission.BYDAUTO_DOOR_LOCK_SET"/>
@@ -46,11 +46,11 @@
     <uses-permission android:name="android.permission.BYDAUTO_ENGINE_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_ENGINE_GET"/>
 
-    <!-- Énergie (batterie, carburant) -->
+    <!-- Energy (battery, fuel) -->
     <uses-permission android:name="android.permission.BYDAUTO_ENERGY_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_ENERGY_GET"/>
 
-    <!-- Boîte de vitesses -->
+    <!-- Gearbox -->
     <uses-permission android:name="android.permission.BYDAUTO_GEARBOX_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_GEARBOX_GET"/>
 
@@ -58,7 +58,7 @@
     <uses-permission android:name="android.permission.BYDAUTO_INSTRUMENT_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_INSTRUMENT_GET"/>
 
-    <!-- Éclairages -->
+    <!-- Lighting -->
     <uses-permission android:name="android.permission.BYDAUTO_LIGHT_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_LIGHT_GET"/>
     <uses-permission android:name="android.permission.BYDAUTO_LIGHT_SET"/>
@@ -71,11 +71,11 @@
     <uses-permission android:name="android.permission.BYDAUTO_RADAR_COMMON"/>
     <uses-permission android:name="android.permission.BYDAUTO_RADAR_GET"/>
 
-    <!-- Confirmé requis pour lancer sur le display cluster (DiLink 3.0).
-         INTERNAL_SYSTEM_WINDOW : signature permission accordée avec platform.keystore.
+    <!-- Confirmed required to launch on the cluster display (DiLink 3.0).
+         INTERNAL_SYSTEM_WINDOW: signature permission granted with platform.keystore.
          MANAGE_ACTIVITY_STACKS (signature|privileged) : requis pour setLaunchDisplayId()
            vers une app TIERCE (Navigation = com.telenav.app.arp) sur display non-default.
-           Accordée automatiquement avec platform.keystore (confirmé : INJECT_EVENTS OK). -->
+           Granted automatically with platform.keystore (confirmed: INJECT_EVENTS OK). -->
     <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW"/>
     <uses-permission android:name="android.permission.MANAGE_ACTIVITY_STACKS"/>
     <!-- Miroir cluster : capture du display 1 via SurfaceControl.screenshot() -->
@@ -88,7 +88,7 @@
         android:label="@string/app_name"
         android:theme="@style/AppTheme">
 
-        <!-- Écran d'accueil : choix de langue (premier lancement uniquement) -->
+        <!-- Welcome screen: language selection (first launch only) -->
         <activity
             android:name=".WelcomeActivity"
             android:label="@string/app_name"
@@ -100,25 +100,25 @@
             </intent-filter>
         </activity>
 
-        <!-- Écran principal 15" -->
+        <!-- Main 15.6" screen -->
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
             android:screenOrientation="landscape"/>
 
-        <!-- Écran de diagnostic de compatibilité -->
+        <!-- Compatibility diagnostic screen -->
         <activity
             android:name=".DiagActivity"
             android:label="Diagnostic"
             android:screenOrientation="landscape"/>
 
-        <!-- Rapport système complet -->
+        <!-- Full system report screen -->
         <activity
             android:name=".SysInfoActivity"
-            android:label="Rapport système"
+            android:label="System report"
             android:screenOrientation="landscape"/>
 
-        <!-- Visualiseur de journal en temps réel -->
+        <!-- Real-time log viewer -->
         <activity
             android:name=".LogActivity"
             android:label="Journal"
@@ -130,7 +130,7 @@
              en passant par notre propre uid (isCallerAllowedToLaunchOnDisplay
              retourne true quand targetUid == callingUid).
              EXPORTED=TRUE : le lancement se fait via ADB shell uid=2000
-             qui possède INTERNAL_SYSTEM_WINDOW dans platform.xml de cette ROM.
+             which holds INTERNAL_SYSTEM_WINDOW in platform.xml on this ROM.
              C'est exactement le pattern qui fonctionnait le 12 avril avec
              BYDDashboardActivity (aussi exported=true). -->
         <activity
@@ -153,7 +153,7 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"/>
 
-        <!-- Service overlay icône de retour rapide au streaming -->
+        <!-- Overlay service: quick-return icon to the streaming view -->
         <service
             android:name=".FloatingRemoteButton"
             android:exported="false"

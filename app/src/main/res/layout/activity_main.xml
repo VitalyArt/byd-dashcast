@@ -55,7 +55,7 @@
             android:layout_marginStart="6dp"
             android:backgroundTint="#2E7D32"/>
 
-        <!-- ⋮ : accès aux outils dev (Activer, Diag, Rapport, Langue, Live) -->
+        <!-- ⋮ : access dev tools (Activate, Diag, Report, Language, Live log) -->
         <Button
             android:id="@+id/btn_overflow"
             android:layout_width="36dp"
@@ -88,8 +88,8 @@
 
     <!-- ===== MIROIR CLUSTER =====
          Wrapper FrameLayout contenant le SurfaceView miroir ET un placeholder texte.
-         Le SurfaceView nécessite ACCESS_SURFACE_FLINGER (permission système) :
-         si indisponible, le placeholder est affiché à la place. -->
+         TextureView requires ACCESS_SURFACE_FLINGER (system permission):
+         if unavailable, the placeholder is shown instead. -->
     <FrameLayout
         android:id="@+id/frame_cluster_mirror"
         android:layout_width="match_parent"
@@ -98,8 +98,8 @@
         android:visibility="gone">
 
         <!-- TextureView: SF est le PRODUCTEUR (il rend le contenu du display dans la surface).
-             new Surface(textureView.getSurfaceTexture()) = surface où SF écrit → TextureView affiche.
-             SurfaceView.getSurface() était incorrect : l'app était le producteur, pas SF. -->
+             new Surface(textureView.getSurfaceTexture()) = surface SF writes into → TextureView displays.
+             SurfaceView.getSurface() was wrong: the app was the producer, not SF. -->
         <TextureView
             android:id="@+id/cluster_mirror"
             android:layout_width="match_parent"
@@ -108,7 +108,7 @@
             android:focusable="true"
             android:contentDescription="Miroir cluster"/>
 
-        <!-- Fallback screencap quand SurfaceControl.createDisplay() échoue (permissions ROM) -->
+        <!-- Fallback screencap when SurfaceControl.createDisplay() fails (ROM permissions) -->
         <ImageView
             android:id="@+id/cluster_mirror_screenshot"
             android:layout_width="match_parent"
@@ -133,9 +133,9 @@
 
     </FrameLayout>
 
-    <!-- ===== PANEL CONTRÔLE CLUSTER =====
-         Affiché uniquement quand une app tierce est active sur le dashboard.
-         Permet de piloter l'app depuis l'écran principal (cluster = non tactile). -->
+    <!-- ===== CLUSTER CONTROL PANEL =====
+         Shown only when a third-party app is active on the cluster.
+         Allows controlling the app from the main screen (cluster is non-touch). -->
     <LinearLayout
         android:id="@+id/panel_cluster_control"
         android:layout_width="match_parent"
@@ -144,7 +144,7 @@
         android:background="#0D1117"
         android:visibility="gone">
 
-        <!-- En-tête : nom de l'app + bouton masquer -->
+        <!-- Header: app name + hide button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="40dp"
