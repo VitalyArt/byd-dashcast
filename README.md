@@ -368,6 +368,11 @@ This project is licensed under the [MIT License](LICENSE).
 > The BYD SDK contains a modified `android.jar` with `android.hardware.bydauto.*` APIs.
 > You must obtain it separately.
 >
+> The file `app/libs/byd-auto-api-stubs.jar` is a stub-only extract of the BYD SDK v1.0.5
+> (interface declarations, no implementation). It is included solely to allow the project
+> to compile without requiring the full SDK. All rights over this file remain with BYD Auto
+> Co., Ltd. If you are the rights holder and wish it removed, please open an issue.
+>
 > Freedom (`com.xdja.clusterdemo`) and WindowManagement are third-party applications
 > (not BYD) whose behavior has been analyzed for interoperability purposes only.
 
