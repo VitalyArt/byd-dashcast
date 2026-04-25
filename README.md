@@ -344,6 +344,7 @@ adb pull /sdcard/Android/data/com.byd.myapp/files/  # package ID unchanged
 | Version | Summary |
 |---------|---------|
 | **0.1.0-alpha** | First public release — cluster mirror working (image + touch) |
+| **0.1.1-alpha** | Bug fixes, code sanity, README improvements |
 | **0.1.2-alpha** | EN translation, DashCast rename, new icon — device-validated |
 
 Full internal development history: [CHANGELOG.md](CHANGELOG.md)
