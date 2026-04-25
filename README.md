@@ -278,17 +278,18 @@ cd MyBYDApp
 
 ### Cluster display size
 
-The instrument cluster physical size must be configured before launching any app,
-otherwise the resolution is wrong (ADAS stretching, wrong DPI).
+The instrument cluster size mode must be set before launching any app.
+The Seal EU has a **10.25" physical screen** (cmd 31), but this mode causes ADAS widget
+stretching. Using cmd 30 (12.3" Seal U-DMI rounded screen profile) fixes the aspect ratio.
 
-| cmd | Screen size | Model |
-|-----|------------|-------|
-| 29  | 8.8" | BYD Han / Tang (older models) |
-| 30  | 12.3" | **BYD Seal EU 2024** (default — use this) | 
-| 31  | 10.25" | Other BYD models |
+| cmd | Screen size | Model | Notes |
+|-----|------------|-------|-------|
+| 29  | 8.8"  | BYD Atto 3 | — |
+| 30  | 12.3" | BYD Seal U-DMI (rounded cluster) | **Use this on Seal EU** — fixes ADAS stretching |
+| 31  | 10.25" | BYD Seal EU | Native size but causes ADAS window distortion |
 
 ```bash
-# Example — force Seal EU 12.3" mode:
+# Force 12.3" mode (recommended for Seal EU):
 adb shell service call AutoContainer 2 i32 1000 i32 30 s16 ""
 ```
 
