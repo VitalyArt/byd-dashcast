@@ -54,7 +54,7 @@ completely reverse-engineered.
 * **Our implementation** uses the same static `SurfaceControl` API, confirming compatibility
   with DiLink 3.0.
 
-For full technical details, see [`doc_api/DEOBFUSCATION_WindowManagement.md`](../doc_api/DEOBFUSCATION_WindowManagement.md).
+For full technical details, see `doc_api/DEOBFUSCATION_WindowManagement.md` in the root of this workspace (not included in the repo — proprietary reverse-engineering notes).
 
 ---
 
@@ -62,7 +62,7 @@ For full technical details, see [`doc_api/DEOBFUSCATION_WindowManagement.md`](..
 
 ```
 app/src/main/java/com/byd/myapp/
-├── MainActivity.java           — Main 15" screen: app list, cluster mirror, split
+├── MainActivity.java           — Main 15.6" screen: app list, cluster mirror, split
 ├── WelcomeActivity.java        — Language selection (first launch)
 ├── DiagActivity.java           — Tests 1–4 (ADB, restore, display size, BootReceiver)
 ├── SysInfoActivity.java        — System report + share
@@ -142,6 +142,51 @@ am force-stop com.xdja.clusterdemo   → stops Freedom (prevents it from reclaim
 sendInfo(1000, 18)                   → 投屏关闭 — close projection
 sendInfo(1000, 0)                    → 主机恢复仪表视频流 — Qt resumes
 ```
+
+---
+
+## Prerequisites
+
+### 1. ADB over network (TCP/IP)
+
+The app communicates with the car via **ADB TCP/IP on port 5555** (localhost, tunneled from the infotainment unit itself). This requires ADB to be enabled on the DiLink system.
+
+On BYD Seal EU (DiLink 3.0), ADB TCP is available at `localhost:5555` from within the infotainment Android environment — no USB cable needed at runtime. The app uses the [dadb](https://github.com/mobile-dev-inc/dadb) library to connect.
+
+### 2. Platform keystore
+
+The APK must be signed with `platform.keystore` (included in the BYD SDK v1.0.5) to obtain `signature`-level permissions (`INJECT_EVENTS`, `BYDAUTO_*`).
+
+Place it at `app/keystore/platform.keystore` before building.
+
+### 3. BYD SDK
+
+See [Build requirements](#build-requirements) below.
+
+---
+
+## Installation
+
+1. Build the APK (see [Build](#build))
+2. Sideload onto the infotainment unit:
+```bash
+adb connect <car-ip>:5555
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+3. Launch the app and run **TEST 1** (Diagnostic) to grant `pm grant` permissions
+
+> If you don't have the car's IP, the app can also be installed via USB when ADB USB debugging is enabled (developer options).
+
+---
+
+## Known issues (alpha)
+
+- **Reliability**: The cluster activation sequence may fail on the first attempt — retry
+- **Freedom dependency**: If Freedom (`com.xdja.clusterdemo`) is not installed, `display=1` is used as a hardcoded fallback, which may not always work
+- **App persistence**: Apps launched on the cluster may return to the main display after a phone call or ADAS event (Qt reclaims the surface)
+- **Split 50/50**: Experimental — may fail depending on target app window mode
+- ** export**: Optional feature requiring a personal remote log analytics workspace (configure `local.properties`)
+- **Language**: UI is bilingual (FR/EN) but some log messages are in French
 
 ---
 
@@ -296,4 +341,4 @@ This project is licensed under the [MIT License](LICENSE).
 >
 > Freedom (`com.xdja.clusterdemo`) and WindowManagement are third-party applications
 > (not BYD) whose behavior has been analyzed for interoperability purposes only.
-| 1.34 | 35 | TEST 10 validated in vehicle ✅ |
+
