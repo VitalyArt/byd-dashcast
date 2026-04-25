@@ -1,7 +1,7 @@
 # BYD Auto App — Contexte projet complet
 
 > Fichier de référence à conserver dans git pour reprise du contexte sur un autre poste ou après compact IA.  
-> Dernière mise à jour : 22/04/2026 — v2.12 — Perf & Sanity checks appliqués : fixed thread pool sur ADB (max 4), memory limit sur ViewHolders (AppListAdapter O(1) OnClickBindings), refactoring Gradle property loading (stream closed properly), et Gradle daemon build opts.
+> Dernière mise à jour : 25/04/2026 — **v2.52 — 🎉 MIROIR CLUSTER FONCTIONNEL** — image + tactile confirmés en voiture. Fix fondamental : TextureView (SF=producteur) au lieu de SurfaceView (app=producteur). Fix crash : `android:background` incompatible TextureView. Tag git : `v2.52-WORKING-MIRROR`.
 
 ---
 
@@ -55,6 +55,9 @@ git push https://$(grep github ~/.git-credentials | sed 's|https://||' | sed 's|
 
 | Version | versionCode | Commit | Fix |
 |---------|-------------|--------|----- |
+| **🎉 2.52** | **155** | `064a9a1` | **MIROIR CLUSTER FONCTIONNEL — image + tactile confirmés en voiture (25/04/2026).** Fix crash au lancement : `android:background` sur `TextureView` → `UnsupportedOperationException` ; `android:hardwareAccelerated="true"` ajouté manifest. Tag git : `v2.52-WORKING-MIRROR`. |
+| **2.51** | **154** | `0e13f12` | **FIX FONDAMENTAL miroir** : `SurfaceView` → `TextureView`. Root cause de l'écran noir depuis le début : `SurfaceView.getSurface()` = app est le PRODUCTEUR → incompatible avec `SurfaceControl.setDisplaySurface()` qui exige SF comme producteur. `new Surface(surfaceTexture)` depuis `TextureView` → SF est le producteur → miroir fonctionne. `SurfaceTextureListener` remplace `SurfaceHolder.Callback`. Confirmé par RE de WindowManagement (app tierce qui fait la même chose). |
+| **2.50** | **153** | `df9a64e` | Debug écran noir : revert Transaction API (v2.43), logs verbeux setupMirror, SF dump bouton Diag. |
 | **2.05** | **110** | `f686f0a` | **4 bugs** : (1) **Mirror** : `SurfaceControl.createDisplay()` retourne null (ACCESS_SURFACE_FLINGER non accordé pour notre UID sur ce ROM) → fallback `screencap -d 1` via ADB (uid=2000 = accès SurfaceFlinger garanti). `AdbLocalClient.captureClusterDisplay()` + `startScreenshotLoop()` + `ImageView cluster_mirror_screenshot` dans layout. ~1 fps, suffisant pour saisie navigation. (2) **savedItem supprimé** : plus de PREF_LAST_APP ni relance auto au démarrage. (3) **Bouton Cluster** : `mMainDisplayPkg` persisté dans `PREF_MAIN_PKG` (SharedPreferences) — survit aux recréations d'Activity. Restauré dans `onCreate()` + `onClusterDisplayConnected()`. (4) **Split** : `am start --bounds` non supporté sur DiLink 3.0 → bounds passées via `--ei bounds_l/t/r/b`. `ClusterTrampolineActivity` lit et applique `ActivityOptions.setLaunchBounds(new Rect(...))` avec fallback sans bounds. |
 | **2.04** | **109** | `d0e0526` | **Sanity check** : suppression code mort (`resizeTaskOnDashboard()`, `resizeTask()`, champ `mMainDisplayApp` write-only). Fix bug `ClusterMirrorManager.resolveLayerStack()` : fallback retournait `displayId` (1) au lieu de `displayId<<16` (65536) — correct pour SurfaceFlinger Android 10 / DiLink 3.0. |
 | **2.03** | **108** | `62f6da9` | **unlockHiddenApis()** : `VMRuntime.setHiddenApiExemptions(["Landroid/", ...])` appelé dans `MainActivity.onCreate()` — même mécanisme que WindowManagement v1.2 — déverrouille `android.view.SurfaceControl` (@hide). `createDisplay(name, false)` puis fallback `secure=true` si null (WindowManagement utilise true sur DiLink 3.0). |
