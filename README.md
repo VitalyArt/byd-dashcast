@@ -171,8 +171,10 @@ See [Build requirements](#build-requirements) below.
 adb connect <car-ip>:5555
 adb install -r app/build/outputs/apk/debug/DashCast-v0.1.1-alpha-debug.apk
 ```
-3. Launch the app. On first launch, an **"Allow USB debugging?"** popup will appear **on the car's screen** — press **ALLOW**. This authorizes the ADB connection used internally by the app (`localhost:5555`).
-4. Open the **⋮ menu → Diagnostic** and run **TEST 1** to grant `BYDAUTO_*_COMMON` permissions via `pm grant`. This step is required once only; permissions persist across reboots.
+3. Launch the app. On first launch, an **"Allow USB debugging?"** popup will appear **on the car's screen** — press **ALLOW**.
+4. The app should be functional immediately. If vehicle data (speed, energy, etc.) is not available, open **⋮ menu → Diagnostic → TEST 1** to force-grant `BYDAUTO_*_COMMON` permissions via `pm grant`.
+
+   > On DiLink 3.0 with `platform.keystore` signing, these permissions are typically pre-granted by the ROM at install time and TEST 1 is not required.
 
 > If you don't have the car's IP, the app can also be installed via USB when ADB USB debugging is enabled (developer options).
 
