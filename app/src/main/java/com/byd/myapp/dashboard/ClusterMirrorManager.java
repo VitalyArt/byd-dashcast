@@ -15,16 +15,16 @@ import com.byd.myapp.AppLogger;
 import java.lang.reflect.Method;
 
 /**
- * Miroir cluster v2.36 — SurfaceControl.createDisplay + setDisplayLayerStack.
+ * Cluster mirror — SurfaceControl.createDisplay + setDisplayLayerStack.
  *
- * Principe (identique à WindowManagement) :
+ * Mechanism (identical to WindowManagement v1.2):
  *   - SurfaceControl.createDisplay("mybyd_preview_mirror", false)
- *   - Transaction.setDisplayLayerStack(token, clusterLayerStack) → miroir du contenu cluster
- *   - Transaction.setDisplaySurface(token, ourSurface) → vers notre SurfaceView
+ *   - Transaction.setDisplayLayerStack(token, clusterLayerStack) → mirrors cluster content
+ *   - Transaction.setDisplaySurface(token, ourSurface) → to our TextureView
  *   - Transaction.setDisplayProjection(token, 0, srcRect, destRect)
- *   → Le SurfaceFlinger composite le cluster dans notre surface. Pas de VirtualDisplay.
+ *   → SurfaceFlinger composites the cluster into our surface. No VirtualDisplay needed.
  *
- * Requiert : ACCESS_SURFACE_FLINGER (signature permission, accordée avec platform.keystore)
+ * Requires: ACCESS_SURFACE_FLINGER (signature permission, granted with platform.keystore)
  */
 public class ClusterMirrorManager {
 
@@ -32,7 +32,7 @@ public class ClusterMirrorManager {
 
     private static final int VDISPLAY_FLAGS = 320;
 
-    // ── SurfaceControl mirror token (nouveau) ──────────────────────────────
+    // ── SurfaceControl mirror token ──────────────────────────────────────────
     private IBinder mMirrorDisplayToken = null;
     private Surface mMirrorSurface      = null;
 
@@ -50,7 +50,7 @@ public class ClusterMirrorManager {
     public int     getPreviewDisplayId()       { return mPreviewDisplayId; }
 
     /**
-     * Déverrouille les APIs cachées (SurfaceControl, Display.getLayerStack, etc.).
+     * Unlocks hidden APIs (SurfaceControl, Display.getLayerStack, etc.).
      */
     public static void unlockHiddenApis() {
         try {
@@ -67,47 +67,47 @@ public class ClusterMirrorManager {
             });
             AppLogger.i(TAG, "unlockHiddenApis OK — SurfaceControl accessible");
         } catch (Exception e) {
-            AppLogger.w(TAG, "unlockHiddenApis ERREUR : " + e.getMessage());
+            AppLogger.w(TAG, "unlockHiddenApis ERROR: " + e.getMessage());
         }
     }
 
-    // ── MIROIR SURFACECONTROL (nouveau — v2.36) ────────────────────────────
+    // ── SURFACECONTROL MIRROR ─────────────────────────────────────────────────
 
     /**
-     * Miroir du contenu du cluster dans la Surface fournie, via SurfaceControl.
+     * Mirrors the cluster content into the provided Surface via SurfaceControl.
      *
-     * Equivalent à ce que fait WindowManagement via son daemon (uid=2000) :
+     * Equivalent to what WindowManagement does via its daemon (uid=2000):
      *   SurfaceControl.createDisplay + setDisplayLayerStack(clusterLayerStack) + setDisplaySurface
      *
-     * Requiert ACCESS_SURFACE_FLINGER (signature permission).
-     * En cas d'échec, retourne false → fallback screencap dans l'appelant.
+     * Requires ACCESS_SURFACE_FLINGER (signature permission).
+     * Returns false on failure → caller falls back to screencap.
      *
-     * @param targetSurface  Surface de notre SurfaceView local (dans l'app)
-     * @param viewW / viewH  Dimensions de la vue (pour la projection)
+     * @param targetSurface  Surface of our local TextureView (in-app)
+     * @param viewW / viewH  View dimensions (for projection mapping)
      */
     public boolean startMirror(Context context, Display clusterDisplay, Surface targetSurface,
                                int viewW, int viewH) {
         if (mMirrorActive) {
-            AppLogger.d(TAG, "Mirror déjà actif");
+            AppLogger.d(TAG, "Mirror already active");
             return true;
         }
         stopPreview();
 
         if (targetSurface == null || !targetSurface.isValid()) {
-            AppLogger.e(TAG, "startMirror : targetSurface invalide");
+            AppLogger.e(TAG, "startMirror: targetSurface is invalid");
             return false;
         }
 
-        // Dimensions cluster
+        // Cluster dimensions
         if (clusterDisplay != null) {
             Point sz = new Point(1920, 720);
             clusterDisplay.getRealSize(sz);
             mClusterW = sz.x; mClusterH = sz.y;
         }
 
-        // ── Tentative SurfaceControl mirror ───────────────────────────────
+        // ── SurfaceControl mirror attempt ────────────────────────────────────
         try {
-            // 1. Layer stack du cluster (API cachée)
+            // 1. Cluster layer stack (@hide API)
             int layerStack = 0;
             try {
                 Method getLayerStack = Display.class.getDeclaredMethod("getLayerStack");
@@ -115,12 +115,12 @@ public class ClusterMirrorManager {
                 layerStack = (Integer) getLayerStack.invoke(clusterDisplay);
                 AppLogger.d(TAG, "Cluster layerStack=" + layerStack);
             } catch (Exception e) {
-                // Sur certaines ROM le layerStack == displayId
+                // On some ROMs layerStack == displayId
                 layerStack = (clusterDisplay != null) ? clusterDisplay.getDisplayId() : 2;
-                AppLogger.w(TAG, "getLayerStack échoué → fallback layerStack=" + layerStack);
+                AppLogger.w(TAG, "getLayerStack failed → fallback layerStack=" + layerStack);
             }
 
-            // 2. Créer un display token pour notre miroir
+            // 2. Create a display token for our mirror
             Class<?> scClass = Class.forName("android.view.SurfaceControl");
             Method createDisplay = scClass.getDeclaredMethod("createDisplay",
                     String.class, boolean.class);
@@ -131,7 +131,7 @@ public class ClusterMirrorManager {
                 throw new RuntimeException("SurfaceControl.createDisplay → null");
             }
 
-            // 3. Projection : conserver le ratio (letterbox)
+            // 3. Projection: preserve aspect ratio (letterbox)
             float scale   = Math.min((float) viewW / mClusterW, (float) viewH / mClusterH);
             int   drawW   = (int) (mClusterW * scale);
             int   drawH   = (int) (mClusterH * scale);
@@ -140,7 +140,7 @@ public class ClusterMirrorManager {
             Rect srcRect  = new Rect(0, 0, mClusterW, mClusterH);
             Rect destRect = new Rect(offsetX, offsetY, offsetX + drawW, offsetY + drawH);
 
-            // 4. Transaction SurfaceControl (méthodes cachées)
+            // 4. SurfaceControl Transaction (@hide methods)
             SurfaceControl.Transaction tx = new SurfaceControl.Transaction();
             Class<?> txClass = tx.getClass();
 
@@ -170,24 +170,24 @@ public class ClusterMirrorManager {
             return true;
 
         } catch (Exception e) {
-            AppLogger.e(TAG, "SurfaceControl mirror ECHEC (ACCESS_SURFACE_FLINGER ?) — utiliser startMirrorViaDaemon()", e);
+            AppLogger.e(TAG, "SurfaceControl mirror FAILED (ACCESS_SURFACE_FLINGER?) — use startMirrorViaDaemon()", e);
             destroyMirrorToken();
             return false;
         }
     }
 
     /**
-     * Miroir via le daemon MirrorDaemon (uid=2000) qui a ACCESS_SURFACE_FLINGER.
-     * Le daemon reçoit la Surface via Binder et configure SurfaceControl (méthodes statiques).
-     * Appel SYNCHRONE : le daemon répond 1 (succès) ou 0 (échec) → mMirrorActive reflète
-     * la réalité, ce qui permet le fallback screencap si le daemon échoue.
+     * Mirror via the MirrorDaemon (uid=2000) which holds ACCESS_SURFACE_FLINGER.
+     * The daemon receives the Surface via Binder and configures SurfaceControl (static methods).
+     * SYNCHRONOUS call: the daemon replies 1 (success) or 0 (failure) → mMirrorActive reflects
+     * reality, which allows the screencap fallback if the daemon fails.
      */
     public boolean startMirrorViaDaemon(IBinder daemonBinder, Display clusterDisplay,
                                         Surface targetSurface, int viewW, int viewH) {
         if (mMirrorActive) return true;
         if (daemonBinder == null || targetSurface == null || !targetSurface.isValid()) return false;
 
-        // Dimensions cluster
+        // Cluster dimensions
         if (clusterDisplay != null) {
             Point sz = new Point(1920, 720);
             clusterDisplay.getRealSize(sz);
@@ -203,7 +203,7 @@ public class ClusterMirrorManager {
             layerStack = (Integer) getLayerStack.invoke(clusterDisplay);
         } catch (Exception e) {
             layerStack = clusterDisplayId;
-            AppLogger.w(TAG, "getLayerStack échoué → fallback layerStack=" + layerStack);
+            AppLogger.w(TAG, "getLayerStack failed → fallback layerStack=" + layerStack);
         }
 
         Parcel data  = Parcel.obtain();
@@ -217,7 +217,7 @@ public class ClusterMirrorManager {
             data.writeInt(viewW);
             data.writeInt(viewH);
             data.writeParcelable(targetSurface, 0);
-            // Appel synchrone (pas FLAG_ONEWAY) → réponse du daemon dans reply
+            // Synchronous call (not FLAG_ONEWAY) → daemon reply in 'reply' parcel
             daemonBinder.transact(com.byd.myapp.daemon.MirrorDaemon.TRANSACT_MIRROR_START,
                     data, reply, 0);
             reply.readException();
@@ -228,12 +228,12 @@ public class ClusterMirrorManager {
                 AppLogger.i(TAG, "startMirrorViaDaemon ✓ layerStack=" + layerStack
                         + " " + mClusterW + "×" + mClusterH + " displayId=" + clusterDisplayId);
             } else {
-                AppLogger.e(TAG, "startMirrorViaDaemon : daemon a rapporté un échec"
-                        + " (vérifier logcat MirrorDaemon pour le détail)");
+                AppLogger.e(TAG, "startMirrorViaDaemon: daemon reported failure"
+                        + " (check logcat for MirrorDaemon details)");
             }
             return daemonOk;
         } catch (Exception e) {
-            AppLogger.e(TAG, "startMirrorViaDaemon échoué", e);
+            AppLogger.e(TAG, "startMirrorViaDaemon failed", e);
             return false;
         } finally {
             data.recycle();
@@ -242,7 +242,7 @@ public class ClusterMirrorManager {
     }
 
     /**
-     * Demande au daemon d'arrêter le miroir SurfaceControl.
+     * Requests the daemon to stop the SurfaceControl mirror.
      */
     public void stopMirrorViaDaemon(IBinder daemonBinder) {
         if (daemonBinder == null) return;
@@ -255,7 +255,7 @@ public class ClusterMirrorManager {
         } catch (Exception ignored) {}
         mMirrorActive  = false;
         mMirrorSurface = null;
-        AppLogger.i(TAG, "stopMirrorViaDaemon envoyé");
+        AppLogger.i(TAG, "stopMirrorViaDaemon sent");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -285,19 +285,19 @@ public class ClusterMirrorManager {
     }
 
     /**
-     * Arrête le preview local (appelé depuis MainActivity.onStop).
+     * Stops the local preview (called from MainActivity.onStop).
      */
     public void stopMirror(Context context) {
         stopPreview();
-        AppLogger.i(TAG, "ClusterMirrorManager preview arrêté");
+        AppLogger.i(TAG, "ClusterMirrorManager preview stopped");
     }
 
     /**
-     * Libère le preview.
-     * À appeler uniquement depuis ClusterService.onDestroy().
+     * Releases the preview.
+     * Must only be called from ClusterService.onDestroy().
      */
     public void release(Context context) {
         stopPreview();
-        AppLogger.i(TAG, "ClusterMirrorManager libéré");
+        AppLogger.i(TAG, "ClusterMirrorManager released");
     }
 }

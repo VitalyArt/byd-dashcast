@@ -14,37 +14,37 @@ import android.os.Bundle;
 import com.byd.myapp.AppLogger;
 
 /**
- * ClusterTrampolineActivity — activity vide lancée sur display 1 pour servir de
+ * ClusterTrampolineActivity — empty activity launched on display 1 to serve as
  * "source activity" lors du lancement d'apps tierces sur le cluster.
  *
  * Pourquoi : sur Seal EU (DiLink 3.0, Android 10), pousser une app tierce
- * directement avec ActivityOptions.setLaunchDisplayId(1) échoue avec
- * SecurityException dans SafeActivityOptions.checkPermissions() — même quand
- * l'APK est signé platform.keystore (INTERNAL_SYSTEM_WINDOW et MANAGE_ACTIVITY_STACKS
- * sont déclarés mais la ROM ne les considère pas suffisants pour cibler un display
- * non-default appartenant à un autre process — confirmé en voiture v1.69 et v1.70).
+ * directly with ActivityOptions.setLaunchDisplayId(1) fails with
+ * SecurityException in SafeActivityOptions.checkPermissions() — even when
+ * the APK is signed with platform.keystore (INTERNAL_SYSTEM_WINDOW and MANAGE_ACTIVITY_STACKS
+ * are declared but the ROM does not consider them sufficient to target a non-default display
+ * belonging to another process — confirmed in car with v1.69 and v1.70).
  *
  * AOSP API 29 — ActivityStackSupervisor.isCallerAllowedToLaunchOnDisplay() :
  *   final int targetUid = aInfo.applicationInfo.uid;
  *   if (targetUid == callingUid) return true;   // ← ON PASSE ICI
  *
  * Donc lancer NOTRE PROPRE activity (uid identique) avec setLaunchDisplayId(1) est
- * autorisé. Une fois cette activity sur display 1, on appelle
+ * allowed. Once this activity is on display 1, we call
  * `Activity.startActivity(intent_tiers)` SANS setLaunchDisplayId : ActivityStarter
  * place la nouvelle task sur le display de la source (display 1) — aucun check de
- * SafeActivityOptions n'est déclenché car launchDisplayId == INVALID_DISPLAY.
+ * SafeActivityOptions is not triggered because launchDisplayId == INVALID_DISPLAY.
  *
- * C'est exactement le pattern utilisé par BYDDashboard officiel.
+ * This is exactly the pattern used by the official BYDDashboard app.
  *
- * Lifecycle : finish() est appelée dès le démarrage du tiers. La task de l'app
- * tierce reste sur display 1 même après destruction du trampoline.
+ * Lifecycle: finish() is called immediately after starting the target app. The task
+ * remains on display 1 even after the trampoline is destroyed.
  */
 public class ClusterTrampolineActivity extends Activity {
 
     private static final String TAG = "ClusterTrampoline";
     public static final String EXTRA_TARGET_PACKAGE = "target_package";
 
-    /** Construit l'Intent de lancement du trampoline pour un tiers donné. */
+    /** Builds the launch Intent for this trampoline targeting a given package. */
     public static Intent buildLaunchIntent(Context ctx, String targetPackage) {
         Intent i = new Intent(ctx, ClusterTrampolineActivity.class);
         i.putExtra(EXTRA_TARGET_PACKAGE, targetPackage);
@@ -62,7 +62,7 @@ public class ClusterTrampolineActivity extends Activity {
                 ? getIntent().getStringExtra(EXTRA_TARGET_PACKAGE)
                 : null;
 
-        AppLogger.i(TAG, "Trampoline lancé sur display="
+        AppLogger.i(TAG, "Trampoline launched on display="
                 + getWindowManager().getDefaultDisplay().getDisplayId()
                 + " — cible: " + pkg);
 
@@ -74,18 +74,18 @@ public class ClusterTrampolineActivity extends Activity {
 
         Intent launch = resolveLaunchIntent(pkg);
         if (launch == null) {
-            AppLogger.e(TAG, "Aucune Activity trouvée pour " + pkg);
+            AppLogger.e(TAG, "No Activity found for " + pkg);
             finish();
             return;
         }
 
-        // CRUCIAL : pas de setLaunchDisplayId ici. La nouvelle task héritera du
+        // CRUCIAL: no setLaunchDisplayId here. The new task inherits the
         // display de la source (nous → display 1).
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TASK
                 | Intent.FLAG_ACTIVITY_NO_ANIMATION);
 
-        // Bounds optionnelles passées via extras entiers (DiLink 3.0 n'accepte pas --bounds)
+        // Optional bounds passed via integer extras (DiLink 3.0 does not accept --bounds)
         int bl = getIntent().getIntExtra("bounds_l", -1);
         int bt = getIntent().getIntExtra("bounds_t", -1);
         int br = getIntent().getIntExtra("bounds_r", -1);
@@ -111,17 +111,17 @@ public class ClusterTrampolineActivity extends Activity {
             }
         } catch (Exception e) {
             if (hasBounds) {
-                // Fallback sans bounds si setLaunchBounds n'est pas supporté sur ce ROM
-                AppLogger.w(TAG, "startActivity avec bounds échoué (" + e.getMessage()
+                // Fallback without bounds if setLaunchBounds is not supported on this ROM
+                AppLogger.w(TAG, "startActivity with bounds failed (" + e.getMessage()
                         + "), fallback sans bounds");
                 try {
                     startActivity(launch);
                     AppLogger.i(TAG, "startActivity(" + pkg + ") fallback sans bounds OK");
                 } catch (Exception e2) {
-                    AppLogger.e(TAG, "startActivity fallback aussi échoué pour " + pkg, e2);
+                    AppLogger.e(TAG, "startActivity fallback also failed for " + pkg, e2);
                 }
             } else {
-                AppLogger.e(TAG, "startActivity échoué pour " + pkg, e);
+                AppLogger.e(TAG, "startActivity failed for " + pkg, e);
             }
         }
         finish();

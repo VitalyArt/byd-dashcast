@@ -7,17 +7,17 @@ import com.byd.myapp.AdbLocalClient;
 import com.byd.myapp.AppLogger;
 
 /**
- * DashboardDisplayHelper — détecte le display secondaire (instrument cluster).
+ * DashboardDisplayHelper — detects the secondary display (instrument cluster).
  *
- * COMPORTEMENT SUR BYD SEAL :
- *   Le cluster n'est PAS exposé comme un display Android visible natif.
- *   Il faut d'abord appeler ClusterManager.activateClusterDisplay() (sendInfo 1000/30+16)
- *   pour que AutoDisplayService crée son VirtualDisplay, puis écouter son apparition.
+ * BEHAVIOR ON BYD SEAL:
+ *   The cluster is NOT exposed as a native visible Android display.
+ *   ClusterManager.activateClusterDisplay() (sendInfo 1000/30+16) must be called first
+ *   so that AutoDisplayService creates its VirtualDisplay; then we listen for it.
  *
- *   Ce helper délègue aujourd'hui toute la logique à ClusterManager.activateClusterDisplay()
- *   qui gère : sendInfo + startService AutoDisplayService + polling VirtualDisplay + timeout.
+ *   This helper delegates all logic to ClusterManager.activateClusterDisplay(),
+ *   which handles: sendInfo + polling VirtualDisplay + timeout.
  *
- *   Le DisplayListener reste enregistré pour détecter les déconnexions.
+ *   The DisplayListener remains registered to detect disconnections.
  */
 public class DashboardDisplayHelper {
 
@@ -33,7 +33,7 @@ public class DashboardDisplayHelper {
     private final Listener mListener;
     private final ClusterManager mClusterManager;
 
-    // ID du display cluster connu — -1 si non connecté
+    // Known cluster display ID — -1 if not connected
     private int mKnownClusterDisplayId = -1;
 
     private final DisplayManager.DisplayListener mDisconnectListener =
@@ -44,7 +44,7 @@ public class DashboardDisplayHelper {
                 @Override
                 public void onDisplayRemoved(int displayId) {
                     if (displayId != mKnownClusterDisplayId) return;
-                    AppLogger.i(TAG, "Dashboard display supprimé : id=" + displayId);
+                    AppLogger.i(TAG, "Dashboard display removed: id=" + displayId);
                     mKnownClusterDisplayId = -1;
                     mListener.onDashboardDisplayDisconnected();
                 }
@@ -61,10 +61,10 @@ public class DashboardDisplayHelper {
     }
 
     /**
-     * Déclenche la séquence d'activation du cluster.
-     * @param freedomJustStarted  true si ClusterService vient de lancer Freedom via startFreedom().
-     *                            Évite un 2e appel redondant à startFreedom() dans ClusterManager
-     *                            si le VirtualDisplay n'est pas encore apparu pendant le délai 2 s.
+     * Triggers the cluster activation sequence.
+     * @param freedomJustStarted  true if ClusterService just launched Freedom via startFreedom().
+     *                            Avoids a redundant second call to startFreedom() in ClusterManager
+     *                            if the VirtualDisplay has not yet appeared within the 2s delay.
      */
     public void start(boolean freedomJustStarted) {
         mKnownClusterDisplayId = -1;
@@ -72,60 +72,60 @@ public class DashboardDisplayHelper {
         mClusterManager.activateClusterDisplay(freedomJustStarted, new ClusterManager.DisplayReadyCallback() {
             @Override
             public void onDisplayReady(Display display, int displayId) {
-                // Guard : si stop() a déjà été appelé, ignorer le callback
+                // Guard: if stop() was already called, discard this callback
                 if (mKnownClusterDisplayId == -2) return;
                 mKnownClusterDisplayId = displayId;
-                AppLogger.i(TAG, "Dashboard display prêt : id=" + displayId
+                AppLogger.i(TAG, "Dashboard display ready: id=" + displayId
                         + " name=" + (display != null ? display.getName() : "null"));
                 mListener.onDashboardDisplayConnected(display, displayId);
             }
 
             @Override
             public void onDisplayTimeout() {
-                // Guard : si stop() a déjà été appelé, ignorer le callback orphelin
+                // Guard: if stop() was already called, discard orphan callback
                 if (mKnownClusterDisplayId == -2) {
-                    AppLogger.d(TAG, "onDisplayTimeout ignoré — stop() déjà appelé");
+                    AppLogger.d(TAG, "onDisplayTimeout ignored — stop() already called");
                     return;
                 }
-                // VirtualDisplay non trouvé via DISPLAY_CATEGORY_PRESENTATION (cas exceptionnel).
-                // Fallback : displayId=1 hardcodé (DiLink 3.0, Seal EU — IActivityManager path).
-                AppLogger.w(TAG, "Dashboard display non détecté après timeout — "
-                        + "fallback hardcodé displayId=1 (DiLink 3.0)");
+                // VirtualDisplay not found via DISPLAY_CATEGORY_PRESENTATION (rare edge case).
+                // Fallback: hardcoded displayId=1 (DiLink 3.0, Seal EU — IActivityManager path).
+                AppLogger.w(TAG, "Dashboard display not detected after timeout — "
+                        + "falling back to hardcoded displayId=1 (DiLink 3.0)");
                 mKnownClusterDisplayId = 1;
-                Display display1 = mDisplayManager.getDisplay(1); // peut retourner null sur certains ROMs
+                Display display1 = mDisplayManager.getDisplay(1); // may return null on some ROMs
                 if (display1 != null) {
-                    AppLogger.i(TAG, "getDisplay(1) != null — display cluster accessible");
+                    AppLogger.i(TAG, "getDisplay(1) != null — cluster display accessible");
                     mListener.onDashboardDisplayConnected(display1, 1);
                 } else {
-                    AppLogger.i(TAG, "getDisplay(1) null — lancement via IActivityManager au displayId=1");
+                    AppLogger.i(TAG, "getDisplay(1) null — launching via IActivityManager at displayId=1");
                     mListener.onDashboardDisplayConnected(null, 1);
                 }
             }
         });
     }
 
-    /** Surcharge sans argument — Freedom non lancé par l'appelant (comportement par défaut). */
+    /** No-arg overload — Freedom not started by the caller (default behavior). */
     public void start() {
         start(false);
     }
 
     public void stop() {
-        // Sentinelle : toute callback ClusterManager orpheline (handler postDelayed) sera ignorée
+        // Sentinel: any orphan ClusterManager callback (handler postDelayed) will be ignored
         mKnownClusterDisplayId = -2;
 
-        // Annuler TOUS les callbacks Handler en attente (polls + timeout) dans ClusterManager.
-        // SANS ça, le timeout de 3s se déclenche après stop() et appelle onDashboardDisplayConnected(null,1) → NPE.
+        // Cancel ALL pending Handler callbacks (polls + timeout) in ClusterManager.
+        // Without this, the 3s timeout fires after stop() and calls onDashboardDisplayConnected(null,1) → NPE.
         mClusterManager.cancel();
 
         mDisplayManager.unregisterDisplayListener(mDisconnectListener);
 
-        // NE PAS appeler stopService(AutoDisplayService) :
-        // Ce service système est démarré au BOOT et gère le VirtualDisplay cluster.
-        // L'arrêter détruirait le VirtualDisplay PRESENTATION pour TOUTE la session Android.
+        // DO NOT call stopService(AutoDisplayService):
+        // That system service is started at BOOT and manages the cluster VirtualDisplay.
+        // Stopping it would destroy the PRESENTATION VirtualDisplay for the entire Android session.
 
-        // Fermer le mode projection via sendInfo(1000, 18) = 投屏关闭 + sendInfo(1000, 0) = rafraîchir Qt.
-        // Envoyé via ADB relay (uid=2000) car com.byd.myapp est bloqué par SecurityException Binder.
-        // Chaîné : cmd=18 d'abord, puis cmd=0 dans le callback pour garantir l'ordre d'éxécution.
+        // Close projection mode via sendInfo(1000, 18) = stop projection + sendInfo(1000, 0) = refresh Qt.
+        // Sent via ADB relay (uid=2000) because com.byd.myapp is blocked by Binder SecurityException.
+        // Chained: cmd=18 first, then cmd=0 in the callback to guarantee execution order.
         AdbLocalClient.sendInfo(mContext, ClusterManager.CLUSTER_TYPE, ClusterManager.CMD_STOP_PROJECTION, "",
             new AdbLocalClient.Callback() {
                 @Override public void onSuccess(String out) {
@@ -133,27 +133,27 @@ public class DashboardDisplayHelper {
                     AdbLocalClient.sendInfo(mContext, ClusterManager.CLUSTER_TYPE, ClusterManager.CMD_RESTORE_NATIVE, "",
                         new AdbLocalClient.Callback() {
                             @Override public void onSuccess(String o) { AppLogger.i(TAG, "restoreNative ADB(cmd=0): " + o); }
-                            @Override public void onError(String e) { AppLogger.e(TAG, "restoreNative ADB ERREUR: " + e); }
+                            @Override public void onError(String e) { AppLogger.e(TAG, "restoreNative ADB error: " + e); }
                         });
                 }
                 @Override public void onError(String err) {
-                    AppLogger.e(TAG, "stopProjection ADB ERREUR: " + err);
+                    AppLogger.e(TAG, "stopProjection ADB error: " + err);
                 }
-            });        // Réinitialiser à -1 se fait dans start() — PAS ici.
-        // Garder la sentinel -2 jusqu'au prochain start() pour bloquer les callbacks
-        // ADB orphelins (thread background peut poster sur mHandler après cancel()).
+            });        // Reset to -1 happens in start() — NOT here.
+        // Keep sentinel -2 until next start() to block orphan ADB callbacks
+        // (background thread may post on mHandler after cancel()).
     }
 
     /**
-     * Variante de stop() sans envoi des commandes ADB de restauration.
-     * À utiliser quand la restauration a déjà été faite en amont (ex: restoreBydDashboard)
-     * pour éviter le double envoi de sendInfo(18+0).
+     * Variant of stop() without sending ADB restore commands.
+     * Use when restoration has already been sent upstream (e.g. restoreBydDashboard)
+     * to avoid double-sending sendInfo(18+0).
      */
     public void stopWithoutAdb() {
         mKnownClusterDisplayId = -2;
         mClusterManager.cancel();
         mDisplayManager.unregisterDisplayListener(mDisconnectListener);
-        AppLogger.i(TAG, "stopWithoutAdb — ADB déjà envoyé en amont");
+        AppLogger.i(TAG, "stopWithoutAdb — ADB already sent upstream");
     }
 
     public int getKnownClusterDisplayId() {

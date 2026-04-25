@@ -7,11 +7,11 @@ import android.content.res.Resources;
 import java.util.Locale;
 
 /**
- * Gère la persistance et l'application de la langue choisie.
+ * Manages persistence and application of the selected language.
  *
- * Utilisé dans :
+ * Used in:
  *  - WelcomeActivity  : premier lancement → choix de langue → sauvegarde
- *  - MainActivity     : applique la langue sauvegardée à chaque démarrage
+ *  - MainActivity     : applies the saved language on each launch
  *  - Application      : applique la langue au niveau global si besoin
  */
 public class LocaleHelper {
@@ -23,14 +23,14 @@ public class LocaleHelper {
     public static final String LANG_FR = "fr";
     public static final String LANG_EN = "en";
 
-    /** Applique la locale sauvegardée au contexte donné. */
+    /** Applies the saved locale to the given context. */
     public static Context applyLocale(Context context) {
         String lang = getSavedLanguage(context);
         if (lang == null) return context;
         return setLocale(context, lang);
     }
 
-    /** Change la locale et met à jour la configuration des ressources. */
+    /** Changes the locale and updates the resource configuration. */
     public static Context setLocale(Context context, String lang) {
         saveLanguage(context, lang);
 

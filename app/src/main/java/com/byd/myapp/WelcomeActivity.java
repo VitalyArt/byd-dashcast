@@ -7,13 +7,13 @@ import android.view.View;
 import android.widget.Button;
 
 /**
- * WelcomeActivity — affiché uniquement au premier lancement.
+ * WelcomeActivity — shown only on the first launch.
  *
  * Propose le choix de langue (FR / EN).
- * Dès que l'utilisateur choisit, la locale est appliquée, le flag
- * "setup_done" est sauvegardé, et MainActivity est démarrée.
+ * Once the user selects a language, the locale is applied, the
+ * "setup_done" flag is saved, and MainActivity is started.
  *
- * Aux lancements suivants, MainActivity démarre directement
+ * On subsequent launches, MainActivity starts directly
  * (voir logique dans onStart ci-dessous).
  */
 public class WelcomeActivity extends AppCompatActivity {
@@ -28,7 +28,7 @@ public class WelcomeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         AppLogger.lifecycle(getClass().getSimpleName(), "onCreate");
 
-        // Si déjà configuré → aller directement à MainActivity
+        // Already configured → go directly to MainActivity
         if (LocaleHelper.isSetupDone(this)) {
             startMainActivity();
             return;

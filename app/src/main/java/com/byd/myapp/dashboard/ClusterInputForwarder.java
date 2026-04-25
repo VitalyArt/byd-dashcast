@@ -13,22 +13,20 @@ import android.view.MotionEvent;
 import java.lang.reflect.Method;
 
 /**
- * Injecte des événements tactiles et claviers à destination de l'app lancée
- * sur le display cluster (non tactile).
+ * Injects touch and key events to the app running on the (non-touch) cluster display.
  *
- * Principe :
- *  - L'utilisateur touche le "touchpad" sur l'écran principal.
- *  - Les coordonnées sont mappées aux dimensions du cluster (ex. 480×240).
- *  - Un MotionEvent est injecté via InputManager.injectInputEvent() (API cachée,
- *    accessible par réflexion, requiert android.permission.INJECT_EVENTS).
- *  - Les KeyEvents Back/Home/Volume sont injectés directement ; ils se routent
- *    vers la fenêtre focalisée, y compris sur le display secondaire.
+ * How it works:
+ *  - The user touches the "touchpad" area on the main 15.6" screen.
+ *  - Coordinates are mapped to the cluster dimensions (e.g. 1920×1080).
+ *  - A MotionEvent is injected via InputManager.injectInputEvent() (@hide API,
+ *    accessed by reflection, requires android.permission.INJECT_EVENTS).
+ *  - KeyEvents (Back/Home/Volume) are injected directly; they route to the
+ *    globally focused window, including on the secondary display.
  *
- * Note : le routage des MotionEvents vers un display secondaire dépend de
- * l'implémentation ROM. Sur Android 7.x BYD, les events injectés aux
- * coordonnées du cluster peuvent atteindre les fenêtres de ce display si
- * l'InputDispatcher BYD supporte le multi-display. Les KeyEvents fonctionnent
- * dans tous les cas car ils ciblent la fenêtre focalisée globalement.
+ * Note: MotionEvent routing to a secondary display depends on ROM implementation.
+ * On BYD DiLink 3.0 (Android 10), events injected with setDisplayId() reach
+ * windows on that display if the InputDispatcher supports multi-display.
+ * KeyEvents always work because they target the globally focused window.
  */
 public class ClusterInputForwarder {
 
@@ -37,46 +35,46 @@ public class ClusterInputForwarder {
 
     private int mClusterWidth      = 1920;
     private int mClusterHeight     = 1080;
-    private int mClusterDisplayId  = 1;   // ID du display cluster (routage API 29)
+    private int mClusterDisplayId  = 1;   // Cluster display ID (routing for API 29)
 
-    /** Binder du daemon MirrorDaemon — si non null, les events sont routés via uid=2000. */
+    /** MirrorDaemon Binder — if non-null, events are routed through uid=2000. */
     private IBinder mDaemonBinder = null;
 
     private Object mInputManager;
     private Method mInjectMethod;
-    private Method mSetDisplayIdMethod = null; // mis en cache pour éviter la réflexion par event
+    private Method mSetDisplayIdMethod = null; // cached to avoid reflection on every event
     private boolean mAvailable = false;
 
     public ClusterInputForwarder(Context context) {
         try {
-            // InputManager.getInstance() est une méthode cachée depuis API 16
+            // InputManager.getInstance() is a @hide method since API 16
             Class<?> imClass = Class.forName("android.hardware.input.InputManager");
             Method getInstance = imClass.getDeclaredMethod("getInstance");
             getInstance.setAccessible(true);
             mInputManager = getInstance.invoke(null);
 
-            // injectInputEvent(InputEvent, int) est cachée mais accessible via réflexion
-            // Requiert android.permission.INJECT_EVENTS (signature permission)
+            // injectInputEvent(InputEvent, int) is @hide but accessible via reflection
+            // Requires android.permission.INJECT_EVENTS (signature permission)
             mInjectMethod = imClass.getDeclaredMethod("injectInputEvent",
                     android.view.InputEvent.class, int.class);
             mInjectMethod.setAccessible(true);
 
-            // Mise en cache de setDisplayId pour éviter la réflexion à chaque touch event
+            // Cache setDisplayId to avoid reflection on every touch event
             try {
                 mSetDisplayIdMethod = MotionEvent.class.getDeclaredMethod("setDisplayId", int.class);
                 mSetDisplayIdMethod.setAccessible(true);
             } catch (Exception ignored) {
-                // API @hide absente sur cette ROM — injection sans displayId
+                // @hide API not available on this ROM — injection without displayId
             }
 
             mAvailable = true;
-            AppLogger.i(TAG, "InputManager injection: disponible");
+            AppLogger.i(TAG, "InputManager injection: available");
         } catch (Exception e) {
-            AppLogger.e(TAG, "Init échouée (permission INJECT_EVENTS absente ?)", e);
+            AppLogger.e(TAG, "Init failed (INJECT_EVENTS permission missing?)", e);
         }
     }
 
-    /** Appelé quand le display cluster est détecté, pour connaître ses dimensions et son ID. */
+    /** Called when the cluster display is detected, to get its dimensions and ID. */
     public void setClusterDisplay(Display display) {
         if (display == null) return;
         android.graphics.Point size = new android.graphics.Point();
@@ -88,35 +86,35 @@ public class ClusterInputForwarder {
                 + " displayId=" + mClusterDisplayId);
     }
 
-    /** Met à jour l'ID du display cluster (utilisé quand Display est null mais l'ID est connu). */
+    /** Updates the cluster display ID (used when Display is null but ID is known). */
     public void setClusterDisplayId(int displayId) {
         mClusterDisplayId = displayId;
     }
 
     /**
-     * Transmet le Binder du daemon MirrorDaemon.
-     * Quand non null, forwardTouch() et injectKey() sont routés via le daemon (uid=2000)
-     * qui possède android.permission.INJECT_EVENTS.
+     * Passes the MirrorDaemon Binder to this forwarder.
+     * When non-null, forwardTouch() and injectKey() are routed through the daemon (uid=2000)
+     * which holds android.permission.INJECT_EVENTS.
      */
     public void setDaemonBinder(IBinder binder) {
         mDaemonBinder = binder;
-        AppLogger.i(TAG, "Daemon Binder connecté — injection touch/key via uid=2000");
+        AppLogger.i(TAG, "Daemon Binder connected — touch/key injection via uid=2000");
     }
 
     /**
-     * Transfère un événement tactile vers le cluster via InputManager.injectInputEvent
-     * avec setDisplayId — identique à ce que fait WindowManagement.
+     * Forwards a touch event to the cluster via InputManager.injectInputEvent
+     * with setDisplayId — identical to what WindowManagement v1.2 does.
      *
-     * @param padX / padY  Coordonnées déjà mappées en espace cluster (pas en espace vue)
-     * @param padW / padH  Dimensions référence (= mClusterWidth/Height si déjà mappées)
+     * @param padX / padY  Coordinates already mapped to cluster space (not view space)
+     * @param padW / padH  Reference dimensions (= mClusterWidth/Height if already mapped)
      * @param action       MotionEvent.ACTION_DOWN / ACTION_MOVE / ACTION_UP
      */
     public void forwardTouch(float padX, float padY, float padW, float padH, final int action) {
-        // Mapping proportionnel vers l'espace cluster
+        // Proportional mapping to cluster space
         final float clusterX = (padX / padW) * mClusterWidth;
         final float clusterY = (padY / padH) * mClusterHeight;
 
-        // Chemin préféré : daemon uid=2000 (INJECT_EVENTS garanti)
+        // Preferred path: daemon uid=2000 (INJECT_EVENTS guaranteed)
         if (mDaemonBinder != null) {
             try {
                 long now = android.os.SystemClock.uptimeMillis();
@@ -143,7 +141,7 @@ public class ClusterInputForwarder {
                 data.recycle();
                 ev.recycle();
             } catch (Exception e) {
-                AppLogger.e(TAG, "forwardTouch via daemon échoué", e);
+                AppLogger.e(TAG, "forwardTouch via daemon failed", e);
             }
             return;
         }
@@ -167,7 +165,7 @@ public class ClusterInputForwarder {
             MotionEvent ev = MotionEvent.obtain(
                     now, now, action, 1, props, coords,
                     0, 0, 1.0f, 1.0f, -1, 0, InputDevice.SOURCE_TOUCHSCREEN, 0);
-            // setDisplayId est une API @hide — utilisation du Method mis en cache dans le constructeur
+            // setDisplayId is a @hide API — using the Method cached in the constructor
             if (mSetDisplayIdMethod != null) {
                 try {
                     mSetDisplayIdMethod.invoke(ev, mClusterDisplayId);
@@ -176,18 +174,18 @@ public class ClusterInputForwarder {
             mInjectMethod.invoke(mInputManager, ev, INJECT_INPUT_EVENT_MODE_ASYNC);
             ev.recycle();
         } catch (Exception e) {
-            AppLogger.e(TAG, "forwardTouch inject échoué x=" + (int)clusterX
+            AppLogger.e(TAG, "forwardTouch inject failed x=" + (int)clusterX
                     + " y=" + (int)clusterY + " disp=" + mClusterDisplayId, e);
         }
     }
 
     /**
-     * Injecte une paire DOWN+UP pour un keyCode Android.
-     * Ex : KeyEvent.KEYCODE_BACK, KEYCODE_HOME, KEYCODE_VOLUME_UP, KEYCODE_DPAD_UP…
-     * Les KeyEvents se routent vers la fenêtre focalisée (y compris sur le cluster).
+     * Injects a DOWN+UP pair for an Android keyCode.
+     * E.g.: KeyEvent.KEYCODE_BACK, KEYCODE_HOME, KEYCODE_VOLUME_UP, KEYCODE_DPAD_UP…
+     * KeyEvents route to the focused window (including on the cluster display).
      */
     public void injectKey(int keyCode) {
-        // Chemin préféré : daemon uid=2000
+        // Preferred path: daemon uid=2000
         if (mDaemonBinder != null) {
             try {
                 long now = SystemClock.uptimeMillis();
@@ -202,7 +200,7 @@ public class ClusterInputForwarder {
                     data.recycle();
                 }
             } catch (Exception e) {
-                AppLogger.e(TAG, "injectKey via daemon échoué", e);
+                AppLogger.e(TAG, "injectKey via daemon failed", e);
             }
             return;
         }
@@ -214,7 +212,7 @@ public class ClusterInputForwarder {
             mInjectMethod.invoke(mInputManager, down, INJECT_INPUT_EVENT_MODE_ASYNC);
             mInjectMethod.invoke(mInputManager, up,   INJECT_INPUT_EVENT_MODE_ASYNC);
         } catch (Exception e) {
-            AppLogger.e(TAG, "Key inject échoué", e);
+            AppLogger.e(TAG, "Key inject failed", e);
         }
     }
 

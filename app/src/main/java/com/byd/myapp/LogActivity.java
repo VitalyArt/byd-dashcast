@@ -24,12 +24,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * LogActivity — visualiseur de journal en temps réel.
+ * LogActivity — real-time log viewer.
  *
- * • Affichage scrollable coloré par niveau : DEBUG=gris, INFO=blanc, WARN=orange, ERROR=rouge
- * • Filtre texte instantané (tag ou message)
+ * • Scrollable display color-coded by level: DEBUG=grey, INFO=white, WARN=orange, ERROR=red
+ * • Instant text filter (by tag or message)
  * • Auto-scroll vers le bas (toggle)
- * • Refresh automatique toutes les 500 ms pendant que l'activité est visible
+ * • Auto-refresh every 500 ms while the activity is visible
  * • Partage texte brut + effacement
  */
 public class LogActivity extends AppCompatActivity {
@@ -118,8 +118,8 @@ public class LogActivity extends AppCompatActivity {
                     public void onSuccess(final int count, final int httpStatus) {
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
-                                tvStatus.setText("✅ Fichier partagé + "
-                                        + count + " entrées  (HTTP " + httpStatus + ")");
+                                tvStatus.setText("✅ File shared + "
+                                        + count + " entries sent to  (HTTP " + httpStatus + ")");
                                 tvStatus.setTextColor(
                                         android.graphics.Color.parseColor("#44DD44"));
                                 btn.setEnabled(true);
@@ -130,7 +130,7 @@ public class LogActivity extends AppCompatActivity {
                     public void onError(final String message) {
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
-                                tvStatus.setText("⚠ Fichier partagé — : ❌ " + message);
+                                tvStatus.setText("⚠ File shared — : ❌ " + message);
                                 tvStatus.setTextColor(
                                         android.graphics.Color.parseColor("#FFA040"));
                                 btn.setEnabled(true);
@@ -161,7 +161,7 @@ public class LogActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
                                 tvStatus.setText("✅ " + count
-                                    + " entrées envoyées (HTTP " + httpStatus + ")");
+                                    + " entries sent (HTTP " + httpStatus + ")");
                                 tvStatus.setTextColor(
                                     android.graphics.Color.parseColor("#44DD44"));
                                 btn.setEnabled(true);
@@ -208,16 +208,16 @@ public class LogActivity extends AppCompatActivity {
             new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
 
     private void refreshLog() {
-        // Évite d'allouer la copie du buffer si ni le compte ni le filtre n'ont changé.
+        // Skip buffer copy if neither the entry count nor the filter has changed.
         int currentCount = AppLogger.getEntriesCount();
         String filter = mFilter.toLowerCase(Locale.getDefault());
         if (currentCount == mLastEntryCount && filter.equals(mLastFilter)) return;
-        // Le buffer ou le filtre a changé : faire la copie et reconstruire.
+        // Buffer or filter changed: copy and rebuild.
         List<AppLogger.Entry> entries = AppLogger.getEntries();
         mLastEntryCount = entries.size();
         mLastFilter     = filter;
 
-        // Construire un SpannableString coloré
+        // Build a color-coded SpannableString
         SpannableString span = buildSpannable(entries, filter);
 
         tvLog.setText(span, TextView.BufferType.SPANNABLE);
@@ -229,15 +229,15 @@ public class LogActivity extends AppCompatActivity {
         }
     }
 
-    /** Cache statique — évite d'allouer un Level[] à chaque itération dans buildSpannable. */
+    /** Static cache — avoids allocating a Level[] on every buildSpannable call. */
     private static final AppLogger.Level[] LEVEL_VALUES = AppLogger.Level.values();
 
     private SpannableString buildSpannable(List<AppLogger.Entry> entries, String filter) {
         StringBuilder sb = new StringBuilder();
-        // Stocke uniquement les positions des entrées qui passent le filtre :
+        // Store only the positions of entries that pass the filter:
         //   {lineStart, lineEnd, timeStart, timeEnd, tagStart, tagEnd, level.ordinal()}
-        // Évite d'allouer 7×entries.size() éléments quand le filtre ne retient qu'une
-        // fraction des entrées (ex. 10/3000 → économise ~84 Ko par rebuild).
+        // Avoids allocating 7×entries.size() elements when the filter retains only a
+        // fraction of entries (e.g. 10/3000 → saves ~84 KB per rebuild).
         java.util.ArrayList<int[]> spanData = new java.util.ArrayList<>();
 
         for (AppLogger.Entry e : entries) {
@@ -278,7 +278,7 @@ public class LogActivity extends AppCompatActivity {
 
         for (int[] d : spanData) {
             int msgColor = levelColor(LEVEL_VALUES[d[6]]);
-            // Ligne entière : couleur du niveau
+            // Full line: level color
             span.setSpan(new ForegroundColorSpan(msgColor),
                     d[0], d[1], Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             // Timestamp en gris discret

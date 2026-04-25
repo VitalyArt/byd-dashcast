@@ -17,17 +17,17 @@ import android.view.SurfaceControl;
 import java.lang.reflect.Method;
 
 /**
- * Daemon MirrorDaemon — lancé via app_process (uid=2000 shell).
+ * Daemon MirrorDaemon — started via app_process (uid=2000 shell).
  *
- * Expose un Binder (IMirrorDaemon) pour :
- *   - TRANSACT_MIRROR_START  (1) : configurer un miroir SurfaceControl du display cluster
- *   - TRANSACT_INJECT_MOTION (2) : injecter un MotionEvent sur le display cluster
- *   - TRANSACT_INJECT_KEY    (3) : injecter un KeyEvent
- *   - TRANSACT_MIRROR_STOP   (4) : détruire le miroir
+ * Exposes a Binder (IMirrorDaemon) for:
+ *   - TRANSACT_MIRROR_START  (1) : configure a SurfaceControl mirror of the cluster display
+ *   - TRANSACT_INJECT_MOTION (2) : inject a MotionEvent on the cluster display
+ *   - TRANSACT_INJECT_KEY    (3) : inject a KeyEvent
+ *   - TRANSACT_MIRROR_STOP   (4) : destroy the mirror
  *
- * Le Binder est diffusé via ACTION_DAEMON_READY au démarrage et sur demande
- * ACTION_REQUEST_BINDER. Seul uid=2000 peut appeler SurfaceControl.createDisplay()
- * et InputManager.injectInputEvent() sans permission supplémentaire.
+ * The Binder is broadcast via ACTION_DAEMON_READY at startup and on demand
+ * ACTION_REQUEST_BINDER. Only uid=2000 can call SurfaceControl.createDisplay()
+ * and InputManager.injectInputEvent() without additional permission.
  */
 public class MirrorDaemon {
 
@@ -45,18 +45,18 @@ public class MirrorDaemon {
     public static final int    TRANSACT_INJECT_KEY    = 3;
     public static final int    TRANSACT_MIRROR_STOP   = 4;
 
-    // État miroir (partagé entre threads via Binder thread pool)
+    // Mirror state (shared between threads via Binder thread pool)
     private static volatile IBinder sMirrorToken     = null;
     private static volatile int     sClusterDisplayId = 2;
 
     // InputManager (init une seule fois)
     private static Object  sInputManager    = null;
     private static Method  sInjectMethod    = null;
-    private static Method  sSetDisplayId    = null;  // MotionEvent.setDisplayId — peut être null
+    private static Method  sSetDisplayId    = null;  // MotionEvent.setDisplayId — may be null
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Helper stdout thread-safe (Log.* va dans logcat, pas dans notre fichier redirigé) */
+    /** Thread-safe stdout helper (Log.* goes to logcat, not our redirected file) */
     private static void out(String msg) {
         System.out.println("[MirrorDaemon] " + msg);
         System.out.flush();
@@ -68,40 +68,40 @@ public class MirrorDaemon {
     }
 
     public static void main(String[] args) {
-        out("main() démarrage uid=" + android.os.Process.myUid());
+        out("main() start uid=" + android.os.Process.myUid());
         try {
             android.os.Process.class.getMethod("setArgV0", String.class)
                     .invoke(null, "com.byd.myapp.mirrordaemon");
             out("setArgV0 OK");
         } catch (Exception ignored) {
-            out("setArgV0 ignoré : " + ignored.getMessage());
+            out("setArgV0 ignored: " + ignored.getMessage());
         }
 
-        Log.i(TAG, "Démarrage MirrorDaemon uid=" + android.os.Process.myUid());
+        Log.i(TAG, "Starting MirrorDaemon uid=" + android.os.Process.myUid());
 
         try {
             out("Looper.getMainLooper()=" + Looper.getMainLooper());
             if (Looper.getMainLooper() == null) Looper.prepareMainLooper();
-            out("Looper prêt");
+            out("Looper ready");
 
             // System context (via ActivityThread)
-            out("Chargement ActivityThread...");
+            out("Loading ActivityThread...");
             Class<?> atClass = Class.forName("android.app.ActivityThread");
-            out("ActivityThread trouvé, appel systemMain()...");
+            out("ActivityThread found, calling systemMain()...");
             Object thread = atClass.getMethod("systemMain").invoke(null);
-            out("systemMain() retourné : " + thread);
+            out("systemMain() returned: " + thread);
             Context context = (Context) thread.getClass()
                     .getMethod("getSystemContext").invoke(thread);
-            out("getSystemContext() retourné : " + context);
+            out("getSystemContext() returned: " + context);
             if (context == null) {
                 err("Context null — abandon", null);
                 Log.e(TAG, "Context null");
                 return;
             }
-            Log.i(TAG, "Context système OK");
-            out("Context système OK");
+            Log.i(TAG, "System context OK");
+            out("System context OK");
 
-            // Déverrouiller les APIs cachées
+            // Unlock hidden APIs
             out("unlockHiddenApis()...");
             unlockHiddenApis();
             out("unlockHiddenApis OK");
@@ -111,14 +111,14 @@ public class MirrorDaemon {
             initInputManager();
             out("initInputManager OK");
 
-            // Créer notre Binder (effectively final pour l'inner class)
-            out("Création MirrorBinder...");
+            // Create our Binder (effectively final for the inner class)
+            out("Creating MirrorBinder...");
             final IBinder daemonBinder = new MirrorBinder();
-            out("MirrorBinder créé");
+            out("MirrorBinder created");
 
             // Enregistrer dans ServiceManager (accessible par uid=2000) :
             // Remplace registerReceiver (interdit depuis systemMain() — AMS rejette
-            // l'IApplicationThread non enregistré → SecurityException).
+            // the unregistered IApplicationThread → SecurityException).
             out("ServiceManager.addService(byd_mirror_daemon)...");
             try {
                 Class<?> smClass = Class.forName("android.os.ServiceManager");
@@ -138,28 +138,28 @@ public class MirrorDaemon {
                     out("ServiceManager.addService (2-arg) OK");
                 }
             } catch (Exception eSm) {
-                err("ServiceManager.addService ECHEC — broadcast seul", eSm);
+                err("ServiceManager.addService FAILED — broadcast only", eSm);
             }
 
-            // SUPPRIMÉ : registerReceiver → SecurityException depuis systemMain()
-            // AMS vérifie que l'IApplicationThread est dans mPidsSelfLocked → refusé
-            // pour un process app_process non passé par la séquence de démarrage normale.
-            // Remplacement : ServiceManager.addService() ci-dessus + sendBroadcast initial.
+            // REMOVED: registerReceiver → SecurityException since systemMain()
+            // AMS verifies that the IApplicationThread is in mPidsSelfLocked → refused
+            // for an app_process not going through the normal startup sequence.
+            // Replacement: ServiceManager.addService() above + initial sendBroadcast.
 
-            // Annoncer notre présence (sendBroadcast fonctionne depuis systemMain())
+            // Announce our presence (sendBroadcast works from systemMain())
             out("broadcastBinder()...");
             broadcastBinder(context, daemonBinder);
-            Log.i(TAG, "MirrorDaemon prêt — Binder diffusé.");
-            out("MirrorDaemon PRÊT — Binder dans ServiceManager + broadcast envoyé — Looper.loop() démarré");
+            Log.i(TAG, "MirrorDaemon ready — Binder broadcast.");
+            out("MirrorDaemon READY — Binder in ServiceManager + broadcast sent — Looper.loop() started");
 
             Looper.loop();
-            out("Looper.loop() terminé (ne devrait pas arriver)");
+            out("Looper.loop() ended (should not happen)");
 
         } catch (Exception e) {
             err("Crash MirrorDaemon", e);
             Log.e(TAG, "Crash MirrorDaemon", e);
         }
-        out("main() terminé");
+        out("main() ended");
     }
 
     // ── Binder ────────────────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ public class MirrorDaemon {
                     int viewH         = data.readInt();
                     Surface surface   = data.readParcelable(Surface.class.getClassLoader());
                     boolean ok = setupMirror(layerStack, clusterW, clusterH, viewW, viewH, surface);
-                    // Répondre au client (appel synchrone, pas oneway)
+                    // Reply to the client (synchronous call, not oneway)
                     if (reply != null) {
                         reply.writeNoException();
                         reply.writeInt(ok ? 1 : 0);
@@ -211,11 +211,11 @@ public class MirrorDaemon {
     // ── SurfaceControl mirror ─────────────────────────────────────────────────
 
     /**
-     * Configure le miroir via les méthodes STATIQUES de SurfaceControl (API deprecated mais
-     * fonctionnelle sur Android 10 BYD ROM — identique à l'approche WindowManagement).
-     * SurfaceControl.Transaction échoue silencieusement sur cette ROM.
+     * Configures the mirror via STATIC methods of SurfaceControl (deprecated API but
+     * functional on Android 10 BYD ROM — identical to the WindowManagement approach).
+     * SurfaceControl.Transaction fails silently on this ROM.
      *
-     * @return true si le miroir a été configuré avec succès
+     * @return true if the mirror was configured successfully
      */
     private static boolean setupMirror(int layerStack, int clusterW, int clusterH,
                                        int viewW, int viewH, Surface surface) {
@@ -227,7 +227,7 @@ public class MirrorDaemon {
         try {
             Class<?> scClass = Class.forName("android.view.SurfaceControl");
 
-            // 1. Créer le display token de miroir
+            // 1. Create the mirror display token
             Method createDisplay = scClass.getDeclaredMethod("createDisplay",
                     String.class, boolean.class);
             createDisplay.setAccessible(true);
@@ -238,7 +238,7 @@ public class MirrorDaemon {
             }
             Log.i(TAG, "setupMirror : createDisplay token=" + sMirrorToken);
 
-            // 2. Projection letterbox (ratio préservé)
+            // 2. Letterbox projection (preserved ratio)
             float scale = Math.min((float) viewW / clusterW, (float) viewH / clusterH);
             int drawW   = (int) (clusterW * scale);
             int drawH   = (int) (clusterH * scale);
@@ -249,11 +249,11 @@ public class MirrorDaemon {
             Log.i(TAG, "setupMirror : src=" + src + " dst=" + dst
                     + " surface.valid=" + surface.isValid());
 
-            // 3. SurfaceControl.Transaction — méthodes d'instance via reflection.
-            //    IMPORTANT : on utilise Transaction (pas les méthodes statiques) car c'est
-            //    ce qui fonctionnait en v2.43. Les méthodes statiques (openTransaction/
-            //    closeTransaction) sont disponibles sur cette ROM mais produisent un écran
-            //    noir sans erreur — comportement observé en v2.45.
+            // 3. SurfaceControl.Transaction — instance methods via reflection.
+            //    IMPORTANT: we use Transaction (not the static methods) because that is
+            //    what worked in v2.43. Static methods (openTransaction/
+            //    closeTransaction) are available on this ROM but produce a black
+            //    screen with no error — behavior observed in v2.45.
             SurfaceControl.Transaction tx = new SurfaceControl.Transaction();
             Class<?> txClass = tx.getClass();
 
@@ -278,7 +278,7 @@ public class MirrorDaemon {
             tx.apply();
             Log.i(TAG, "setupMirror : tx.apply() OK");
 
-            // 4. Vérification post-setup via dumpsys SurfaceFlinger
+            // 4. Post-setup verification via dumpsys SurfaceFlinger
             try {
                 Process p = Runtime.getRuntime().exec(
                         new String[]{"sh", "-c",
@@ -299,7 +299,7 @@ public class MirrorDaemon {
             return true;
 
         } catch (Exception e) {
-            Log.e(TAG, "setupMirror échoué", e);
+            Log.e(TAG, "setupMirror failed", e);
             sMirrorToken = null;
             return false;
         }
@@ -316,7 +316,7 @@ public class MirrorDaemon {
             destroyDisplay.invoke(null, token);
             Log.i(TAG, "stopMirror ✓");
         } catch (Exception e) {
-            Log.w(TAG, "stopMirror : destroyDisplay échoué : " + e.getMessage());
+            Log.w(TAG, "stopMirror: destroyDisplay failed: " + e.getMessage());
         }
     }
 
@@ -328,7 +328,7 @@ public class MirrorDaemon {
             if (sSetDisplayId != null) sSetDisplayId.invoke(ev, sClusterDisplayId);
             sInjectMethod.invoke(sInputManager, ev, 0 /* ASYNC */);
         } catch (Exception e) {
-            Log.w(TAG, "injectMotion échoué : " + e.getMessage());
+            Log.w(TAG, "injectMotion failed: " + e.getMessage());
         }
     }
 
@@ -337,7 +337,7 @@ public class MirrorDaemon {
         try {
             sInjectMethod.invoke(sInputManager, kev, 0 /* ASYNC */);
         } catch (Exception e) {
-            Log.w(TAG, "injectKey échoué : " + e.getMessage());
+            Log.w(TAG, "injectKey failed: " + e.getMessage());
         }
     }
 
@@ -356,7 +356,7 @@ public class MirrorDaemon {
             } catch (Exception ignored) { /* ROM sans setDisplayId */ }
             Log.i(TAG, "InputManager init OK");
         } catch (Exception e) {
-            Log.e(TAG, "initInputManager échoué", e);
+            Log.e(TAG, "initInputManager failed", e);
         }
     }
 
@@ -370,10 +370,10 @@ public class MirrorDaemon {
         context.sendBroadcast(intent);
     }
 
-    // ── App launch (hérité) ───────────────────────────────────────────────────
+    // ── App launch (inherited) ─────────────────────────────────────────────────
 
     private static void handleLaunch(Context c, Intent intent) {
-        Log.i(TAG, "DAEMON_LAUNCH reçu");
+        Log.i(TAG, "DAEMON_LAUNCH received");
         String pkg       = intent.getStringExtra("pkg");
         String cls       = intent.getStringExtra("cls");
         int displayId    = intent.getIntExtra("displayId", 0);
@@ -396,9 +396,9 @@ public class MirrorDaemon {
                 } catch (Exception ignored) {}
             }
             c.startActivity(launchIntent, opts.toBundle());
-            Log.i(TAG, "Lancement ✓ " + pkg + "/" + cls + " display=" + displayId);
+            Log.i(TAG, "Launched ✓ " + pkg + "/" + cls + " display=" + displayId);
         } catch (Exception e) {
-            Log.e(TAG, "handleLaunch échoué : " + pkg, e);
+            Log.e(TAG, "handleLaunch failed: " + pkg, e);
         }
     }
 
@@ -419,7 +419,7 @@ public class MirrorDaemon {
                     new Object[]{new String[]{"Landroid/", "Lcom/android/", "Ljava/lang/"}});
             Log.i(TAG, "unlockHiddenApis OK");
         } catch (Exception e) {
-            Log.e(TAG, "unlockHiddenApis échoué", e);
+            Log.e(TAG, "unlockHiddenApis failed", e);
         }
     }
 }

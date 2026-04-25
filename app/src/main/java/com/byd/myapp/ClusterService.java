@@ -17,21 +17,21 @@ import com.byd.myapp.dashboard.DashboardDisplayHelper;
 import com.byd.myapp.dashboard.DashboardLauncher;
 
 /**
- * ClusterService — Foreground Service qui maintient la projection sur le cluster
- * indépendamment du cycle de vie de MainActivity.
+ * ClusterService — Foreground Service that maintains projection on the cluster
+ * independently of the MainActivity lifecycle.
  *
- * L'utilisateur peut mettre l'app en background (revenir sur l'écran principal BYD,
- * utiliser d'autres apps) sans que la projection cluster soit interrompue.
+ * The user can put the app in the background (return to the main BYD screen,
+ * use other apps) without the cluster projection being interrupted.
  *
- * Lifecycle :
- *   - Démarré par MainActivity.onCreate() via startForegroundService()
- *   - MainActivity se bind/unbind en onStart()/onStop() pour accéder aux données
- *   - Le service continue de tourner tant que stopSelf() n'a pas été appelé
- *   - stopProjection() est appelé explicitement (bouton Restaurer BYD ou destruction de l'app)
+ * Lifecycle:
+ *   - Started by MainActivity.onCreate() via startForegroundService()
+ *   - MainActivity binds/unbinds in onStart()/onStop() to access data
+ *   - The service keeps running until stopSelf() is called
+ *   - stopProjection() is called explicitly (Restore BYD button or app destruction)
  *
- * Communication avec MainActivity :
- *   - LocalBinder.getService() retourne l'instance du service
- *   - MainActivity implémente ClusterService.Listener pour les callbacks display
+ * Communication with MainActivity:
+ *   - LocalBinder.getService() returns the service instance
+ *   - MainActivity implements ClusterService.Listener for display callbacks
  */
 public class ClusterService extends Service implements DashboardDisplayHelper.Listener {
 
@@ -39,11 +39,11 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     private static final String CHANNEL_ID = "cluster_projection";
     private static final int NOTIF_ID = 1;
 
-    // ── Listener pour MainActivity ──────────────────────────────────────────
+    // ── Listener for MainActivity ───────────────────────────────────────────
     public interface Listener {
         void onClusterDisplayConnected(Display display, int displayId);
         void onClusterDisplayDisconnected();
-        /** État de Freedom vérifié au démarrage du service (appelé sur le main thread). */
+        /** Freedom state checked at service startup (called on the main thread). */
         void onFreedomStatus(AdbLocalClient.FreedomStatus status);
     }
 
@@ -54,16 +54,16 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     private final IBinder mBinder = new LocalBinder();
 
-    // ── État ────────────────────────────────────────────────────────────────
+    // ── State ───────────────────────────────────────────────────────────────
     private DashboardDisplayHelper mDisplayHelper;
     private DashboardLauncher      mLauncher;
     private ClusterMirrorManager   mMirrorManager;
     private ClusterInputForwarder  mInputForwarder;
     private Listener               mListener;
     private boolean                mProjectionActive = false;
-    // Dernier état Freedom connu — mis en cache pour replay dans setListener()
+    // Last known Freedom state — cached for replay in setListener()
     private AdbLocalClient.FreedomStatus mFreedomStatus = null;
-    // Handler réutilisable sur le main thread (remplace les new Handler() éphémères).
+    // Reusable handler on the main thread (replaces ephemeral new Handler() calls).
     private final android.os.Handler mMainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
     // ────────────────────────────────────────────────────────────────────────
@@ -76,15 +76,15 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
         mMirrorManager  = new ClusterMirrorManager();
         mInputForwarder = new ClusterInputForwarder(this);
         
-        // Prédémarrer le MirrorDaemon (app_process via ADB) pour le Real-Time Cluster Mirror + Touch
-        // Executé ici au lieu de MainActivity pour éviter de le relancer à chaque rotation d'écran.
+        // Pre-start the MirrorDaemon (app_process via ADB) for Real-Time Cluster Mirror + Touch
+        // Executed here instead of in MainActivity to avoid restarting it on every screen rotation.
         AdbLocalClient.startMirrorDaemon(this);
         
         createNotificationChannel();
-        startForeground(NOTIF_ID, buildNotification("Cluster : initialisation…"));
-        AppLogger.log(TAG, "ClusterService créé — vérification état Freedom");
+        startForeground(NOTIF_ID, buildNotification("Cluster: initializing…"));
+        AppLogger.log(TAG, "ClusterService created — checking Freedom state");
         mProjectionActive = true;
-        // Diagnostic signatures + permissions — debug uniquement (ouvre une connexion ADB).
+        // Signature + permissions diagnostics — debug only (opens an ADB connection).
         if (BuildConfig.DEBUG) {
             AdbLocalClient.dumpSignatureAndPermissions(this);
         }
@@ -93,7 +93,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // START_STICKY : le système recrée le service s'il est tué par manque de mémoire
+        // START_STICKY: the system recreates the service if killed due to low memory
         return START_STICKY;
     }
 
@@ -104,8 +104,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     @Override
     public boolean onUnbind(Intent intent) {
-        // Garder le listener null pour éviter les leaks si MainActivity est détruite.
-        // return false : chaque nouveau bindService() passe par onBind() normalement.
+        // Keep listener null to avoid leaks if MainActivity is destroyed.
+        // return false: each new bindService() call goes through onBind() normally.
         mListener = null;
         return false;
     }
@@ -114,28 +114,28 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     public void onDestroy() {
         super.onDestroy();
         mListener = null;
-        // Annuler tous les Runnable en attente sur mMainHandler AVANT release() :
-        // le launchOnDashboard (postDelayed 2s) pourrait poster une callback
-        // sur un service détruit (NPE / leak de thread ADB).
+        // Cancel all pending Runnables on mMainHandler BEFORE release():
+        // launchOnDashboard (postDelayed 2s) could post a callback
+        // on a destroyed service (NPE / ADB thread leak).
         mMainHandler.removeCallbacksAndMessages(null);
-        // release() = preview + overlay cluster (stopMirror() ne libère que le preview)
+        // release() = preview + cluster overlay (stopMirror() only releases the preview)
         mMirrorManager.release(this);
         if (mProjectionActive) {
             mDisplayHelper.stop();
         }
-        AppLogger.log(TAG, "ClusterService détruit");
+        AppLogger.log(TAG, "ClusterService destroyed");
     }
 
-    // ── API publique (appelée depuis MainActivity via le binder) ────────────
+    // ── Public API (called from MainActivity via the binder) ─────────────────
 
     /**
-     * Vérifie l'état de Freedom via ADB, puis :
-     *   ACTIVE      → mDisplayHelper.start() directement
-     *   INACTIVE    → startFreedom() (force-stop + navigationType=1 + am start) → délai 2s → start()
-     *   NOT_INSTALLED → mDisplayHelper.start() quand même (let activateClusterDisplay gérer le fallback)
+     * Checks Freedom state via ADB, then:
+     *   ACTIVE      → mDisplayHelper.start() directly
+     *   INACTIVE    → startFreedom() (force-stop + navigationType=1 + am start) → 2s delay → start()
+     *   NOT_INSTALLED → mDisplayHelper.start() anyway (let activateClusterDisplay handle the fallback)
      */
     private void checkAndStartWithFreedom() {
-        AppLogger.i(TAG, "Freedom : vérification état avant activation cluster");
+        AppLogger.i(TAG, "Freedom: checking state before cluster activation");
         AdbLocalClient.checkFreedomState(this, new AdbLocalClient.FreedomStateCallback() {
             @Override public void onResult(final AdbLocalClient.FreedomStatus status) {
                 mMainHandler.post(new Runnable() {
@@ -144,23 +144,23 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         AppLogger.i(TAG, "Freedom state: " + status);
                         if (mListener != null) mListener.onFreedomStatus(status);
                         if (status == AdbLocalClient.FreedomStatus.INACTIVE) {
-                            // Freedom installé mais inactif → démarrer en mode 全屏導航 d'abord
-                            AppLogger.i(TAG, "Freedom INACTIVE → startFreedom() avant activation cluster");
+                            // Freedom installed but inactive → start in 全屏導航 mode first
+                            AppLogger.i(TAG, "Freedom INACTIVE → startFreedom() before cluster activation");
                             AdbLocalClient.startFreedom(ClusterService.this, true, new AdbLocalClient.Callback() {
                                 @Override public void onSuccess(String r) {
-                                    AppLogger.i(TAG, "startFreedom pré-check OK → " + r.trim().replace("\n", " "));
-                                    // Délai 2s : laisser Freedom créer le VirtualDisplay fission
+                                    AppLogger.i(TAG, "startFreedom pre-check OK → " + r.trim().replace("\n", " "));
+                                    // 2s delay: let Freedom create the fission VirtualDisplay
                                     mMainHandler.postDelayed(new Runnable() {
                                         @Override public void run() { mDisplayHelper.start(true); }
                                     }, 2000);
                                 }
                                 @Override public void onError(String err) {
-                                    AppLogger.w(TAG, "startFreedom pré-check ERREUR (on continue) : " + err);
+                                    AppLogger.w(TAG, "startFreedom pre-check ERROR (continuing): " + err);
                                     mDisplayHelper.start();
                                 }
                             });
                         } else {
-                            // ACTIVE (fast path) ou NOT_INSTALLED (fallback dans activateClusterDisplay)
+                            // ACTIVE (fast path) or NOT_INSTALLED (fallback in activateClusterDisplay)
                             mDisplayHelper.start();
                         }
                     }
@@ -171,11 +171,11 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     public void setListener(Listener listener) {
         mListener = listener;
-        // Rejouer l'état Freedom en cache si disponible (check lancé avant le bind)
+        // Replay cached Freedom state if available (check launched before bind)
         if (mFreedomStatus != null && mListener != null) {
             mListener.onFreedomStatus(mFreedomStatus);
         }
-        // Si le display est déjà connu, notifier immédiatement (reconnexion de l'Activity)
+        // If the display is already known, notify immediately (Activity reconnection)
         int knownId = mDisplayHelper.getKnownClusterDisplayId();
         if (knownId > 0 && mListener != null) {
             Display d = null;
@@ -206,29 +206,29 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Lance une app sur le cluster.
-     * Séquence d'activation :
-     *   1. sendInfo(1000, 30) — Seal EU screen size (CONFIRMÉ 16/04/2026)
+     * Launches an app on the cluster.
+     * Activation sequence:
+     *   1. sendInfo(1000, 30) — Seal EU screen size (CONFIRMED 16/04/2026)
      *   2. sendInfo(1000, 16) — Qt standby
-     * Ces deux commandes sont déjà envoyées par activateClusterDisplay() au démarrage du service.
-     * Ce méthode ajoute le délai post-activation puis lance l'app.
-     * La callback est appelée sur le main thread.
+     * Both commands are already sent by activateClusterDisplay() at service startup.
+     * This method adds the post-activation delay then launches the app.
+     * The callback is called on the main thread.
      */
     public void launchOnDashboard(final String packageName, final LaunchCallback callback) {
-        // sendInfo(16) déjà envoyé par activateClusterDisplay() — ne pas rappeler ici
-        // (risque de toggle Qt si cmd=16 n'est pas idempotent).
-        // Pour le chemin direct (tap app sans passage par activateCluster),
-        // activateClusterDisplay() a été appelé lors du démarrage du service → Qt déjà en standby.
-        AppLogger.log(TAG, "launchOnDashboard — délai 2s → " + packageName);
+        // sendInfo(16) already sent by activateClusterDisplay() — do not call again here
+        // (risk of toggling Qt if cmd=16 is not idempotent).
+        // For the direct path (tap app without going through activateCluster),
+        // activateClusterDisplay() was called at service startup → Qt already in standby.
+        AppLogger.log(TAG, "launchOnDashboard — 2s delay → " + packageName);
         mMainHandler.postDelayed(new Runnable() {
             @Override public void run() {
-                // Lancement direct via IActivityManager sur le display Freedom (prouvé v2.29).
+                // Direct launch via IActivityManager on the Freedom display (proven v2.29).
                 final int displayId = mDisplayHelper.getKnownClusterDisplayId();
-                AppLogger.i(TAG, "Lancement IActivityManager sur display=" + displayId + " → " + packageName);
+                AppLogger.i(TAG, "Launching via IActivityManager on display=" + displayId + " → " + packageName);
                 try {
                     android.content.Intent launchIntent = getPackageManager().getLaunchIntentForPackage(packageName);
                     if (launchIntent == null) {
-                        AppLogger.e(TAG, "Aucun intent de lancement trouvé pour " + packageName);
+                        AppLogger.e(TAG, "No launch intent found for " + packageName);
                         if (callback != null) {
                             mMainHandler.post(new Runnable() {
                                 @Override public void run() { callback.onResult(false); }
@@ -249,7 +249,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         });
                     }
                 } catch (Exception e) {
-                    AppLogger.e(TAG, "Erreur globale de lancement de " + packageName, e);
+                    AppLogger.e(TAG, "Global launch error for " + packageName, e);
                     if (callback != null) {
                         mMainHandler.post(new Runnable() {
                             @Override public void run() { callback.onResult(false); }
@@ -261,8 +261,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Lance une app sur le cluster avec des bounds FREEFORM explicites (mode split).
-     * Le display étant déjà actif, le délai est réduit à 500 ms.
+     * Launches an app on the cluster with explicit FREEFORM bounds (split mode).
+     * Since the display is already active, the delay is reduced to 500 ms.
      */
     public void launchOnDashboardWithBounds(final String packageName,
             final int left, final int top, final int right, final int bottom,
@@ -285,7 +285,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         }
                     }
                     @Override public void onError(String error) {
-                        AppLogger.e(TAG, "ADB trampoline bounds ÉCHEC — "
+                        AppLogger.e(TAG, "ADB trampoline bounds FAILURE — "
                                 + error.replace("\n", " | "));
                         if (callback != null) {
                             mMainHandler.post(new Runnable() {
@@ -303,20 +303,20 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Lance une app sur un displayId spécifique (ex: VirtualDisplay preview de ClusterMirrorManager).
-     * Délai court (500ms) car le display est déjà prêt (pas d'activation Freedom nécessaire).
-     * Utilise la même réflexion IActivityManager que launchOnDashboard().
+     * Launches an app on a specific displayId (e.g. VirtualDisplay preview from ClusterMirrorManager).
+     * Short delay (500ms) because the display is already ready (no Freedom activation needed).
+     * Uses the same IActivityManager reflection as launchOnDashboard().
      */
     public void launchOnSpecificDisplay(final String packageName, final int displayId,
             final LaunchCallback callback) {
-        AppLogger.i(TAG, "launchOnSpecificDisplay → " + packageName + " sur display=" + displayId);
+        AppLogger.i(TAG, "launchOnSpecificDisplay → " + packageName + " on display=" + displayId);
         mMainHandler.postDelayed(new Runnable() {
             @Override public void run() {
                 try {
                     android.content.Intent launchIntent =
                             getPackageManager().getLaunchIntentForPackage(packageName);
                     if (launchIntent == null) {
-                        AppLogger.e(TAG, "Aucun intent pour " + packageName);
+                        AppLogger.e(TAG, "No intent for " + packageName);
                         if (callback != null) {
                             mMainHandler.post(new Runnable() {
                                 @Override public void run() { callback.onResult(false); }
@@ -324,23 +324,23 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         }
                         return;
                     }
-                    // MULTIPLE_TASK (pas CLEAR_TASK) : permet 2 instances indépendantes
-                    // sans tuer l'instance déjà lancée sur le cluster (Display 2)
+                    // MULTIPLE_TASK (not CLEAR_TASK): allows 2 independent instances
+                    // without killing the instance already launched on the cluster (Display 2)
                     launchIntent.addFlags(0x10000000 | 0x08000000); // NEW_TASK | MULTIPLE_TASK
                     android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
                     opts.setLaunchDisplayId(displayId);
 
                     startActivityViaIAM(launchIntent, opts);
 
-                    AppLogger.i(TAG, "launchOnSpecificDisplay réussi → " + packageName
-                            + " sur display=" + displayId);
+                    AppLogger.i(TAG, "launchOnSpecificDisplay succeeded → " + packageName
+                            + " on display=" + displayId);
                     if (callback != null) {
                         mMainHandler.post(new Runnable() {
                             @Override public void run() { callback.onResult(true); }
                         });
                     }
                 } catch (Exception e) {
-                    AppLogger.e(TAG, "launchOnSpecificDisplay ERREUR", e);
+                    AppLogger.e(TAG, "launchOnSpecificDisplay ERROR", e);
                     if (callback != null) {
                         mMainHandler.post(new Runnable() {
                             @Override public void run() { callback.onResult(false); }
@@ -352,8 +352,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Invoque IActivityManager.startActivityAsUser() par réflexion, avec fallback Context.startActivity().
-     * Partagé par launchOnDashboard() et launchOnSpecificDisplay() — élimine 15 lignes dupliquées.
+     * Invokes IActivityManager.startActivityAsUser() via reflection, with Context.startActivity() fallback.
+     * Shared by launchOnDashboard() and launchOnSpecificDisplay() — eliminates 15 duplicated lines.
      */
     private void startActivityViaIAM(android.content.Intent intent, android.app.ActivityOptions opts) {
         try {
@@ -375,27 +375,27 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
         }
     }
 
-    /** Arrête proprement la projection (sendInfo(0) + stopService AutoDisplayService). */
+    /** Cleanly stops the projection (sendInfo(0) + stopService AutoDisplayService). */
     public void stopProjection() {
-        AppLogger.log(TAG, "stopProjection demandé");
+        AppLogger.log(TAG, "stopProjection requested");
         mProjectionActive = false;
         mDisplayHelper.stop();
         mLauncher.setDashboardDisplayId(-1);
-        updateNotification("Cluster : arrêté");
+        updateNotification("Cluster: stopped");
         stopSelf();
     }
 
     /**
-     * Synchronise l'état du service SANS renvoyer les commandes ADB de restauration.
-     * À utiliser quand la restauration ADB a déjà été faite en amont (ex: restoreBydDashboard).
-     * Évite le double envoi de sendInfo(18+0).
+     * Syncs the service state WITHOUT resending the ADB restore commands.
+     * To be used when ADB restore has already been done upstream (e.g. restoreBydDashboard).
+     * Avoids double sending sendInfo(18+0).
      */
     public void stopProjectionNoAdb() {
-        AppLogger.log(TAG, "stopProjectionNoAdb demandé (ADB déjà envoyé)");
+        AppLogger.log(TAG, "stopProjectionNoAdb requested (ADB already sent)");
         mProjectionActive = false;
         mDisplayHelper.stopWithoutAdb();
         mLauncher.setDashboardDisplayId(-1);
-        updateNotification("Cluster : arrêté");
+        updateNotification("Cluster: stopped");
         stopSelf();
     }
 
@@ -403,12 +403,12 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     @Override
     public void onDashboardDisplayConnected(final Display display, final int displayId) {
-        AppLogger.log(TAG, "Display cluster connecté : id=" + displayId);
+        AppLogger.log(TAG, "Cluster display connected: id=" + displayId);
         mLauncher.setDashboardDisplayId(displayId);
-        // Mettre à jour le forwarder avec les dimensions et l'ID réels du display
+        // Update the forwarder with the real dimensions and ID of the display
         mInputForwarder.setClusterDisplay(display);
         mInputForwarder.setClusterDisplayId(displayId);
-        updateNotification("Cluster actif — display " + displayId);
+        updateNotification("Cluster active — display " + displayId);
 
         if (mListener != null) {
             mListener.onClusterDisplayConnected(display, displayId);
@@ -417,22 +417,22 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     @Override
     public void onDashboardDisplayDisconnected() {
-        AppLogger.log(TAG, "Display cluster déconnecté");
+        AppLogger.log(TAG, "Cluster display disconnected");
         mLauncher.setDashboardDisplayId(-1);
-        updateNotification("Cluster : déconnecté");
+        updateNotification("Cluster: disconnected");
         if (mListener != null) {
             mListener.onClusterDisplayDisconnected();
         }
     }
 
-    // ── Notification (obligatoire pour Foreground Service) ──────────────────
+    // ── Notification (required for Foreground Service) ───────────────────────
 
     private void createNotificationChannel() {
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Projection cluster",
+                "Cluster projection",
                 NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("Maintient l'affichage sur le cluster BYD");
+        channel.setDescription("Maintains display on the BYD cluster");
         channel.setShowBadge(false);
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm != null) nm.createNotificationChannel(channel);

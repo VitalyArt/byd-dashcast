@@ -16,17 +16,17 @@ import android.view.WindowManager;
 import android.widget.TextView;
 
 /**
- * FloatingRemoteButton — bouton overlay persistant (visible sur tous les écrans).
+ * FloatingRemoteButton — persistent overlay button (visible over all screens).
  *
- * Affiche un petit badge "GPS" déplaçable dans le coin de l'écran.
- * • Un tap ramène MainActivity au premier plan.
+ * Displays a small draggable "GPS" badge in the corner of the screen.
+ * • A tap brings MainActivity back to the foreground.
  * • Long press ferme ce service overlay.
  *
- * Démarre comme foreground Service depuis MainActivity.onCreate() et reste
+ * Started as a foreground Service from MainActivity.onCreate() and stays
  * actif tanto que l'app est vivante.
  *
- * Utilise TYPE_APPLICATION_OVERLAY (2038) — SYSTEM_ALERT_WINDOW est déclaré
- * dans le manifest ET l'APK est signé avec platform.keystore (= accordé).
+ * Uses TYPE_APPLICATION_OVERLAY (2038) — SYSTEM_ALERT_WINDOW is declared
+ * in the manifest AND the APK is signed with platform.keystore (= granted).
  */
 public class FloatingRemoteButton extends Service {
 
@@ -36,8 +36,8 @@ public class FloatingRemoteButton extends Service {
 
     private WindowManager mWindowManager;
     private View          mFloatView;
-    // Guard contre la boucle infinie : si canDrawOverlays() reste false après le grant ADB
-    // (ex. l'AppOp ne prend pas effet immédiatement), on ne réessaie qu'une seule fois.
+    // Guard against infinite loop: if canDrawOverlays() stays false after ADB grant
+    // (e.g. AppOp not effective immediately), only retry once.
     private boolean       mGrantAttempted = false;
 
     @Override
@@ -45,11 +45,11 @@ public class FloatingRemoteButton extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (mFloatView != null) return START_STICKY; // déjà créé
+        if (mFloatView != null) return START_STICKY; // already created
 
         startForegroundCompat();
         createOverlay();
-        AppLogger.d(TAG, "FloatingRemoteButton démarré");
+        AppLogger.d(TAG, "FloatingRemoteButton started");
         return START_STICKY;
     }
 
@@ -65,39 +65,39 @@ public class FloatingRemoteButton extends Service {
     // ── Overlay ───────────────────────────────────────────────────────────────
 
     private void createOverlay() {
-        // Guard : SYSTEM_ALERT_WINDOW (AppOp) doit être accordée avant addView().
-        // Sur Android 10+, même avec platform.keystore, l'AppOp n'est pas accordé
+        // Guard: SYSTEM_ALERT_WINDOW (AppOp) must be granted before addView().
+        // On Android 10+, even with platform.keystore, AppOp may not be granted
         // automatiquement pour une app en /data/app.  On tente un auto-grant via le
         // shell ADB local (dadb), puis on relance createOverlay() sur le main thread.
         if (!android.provider.Settings.canDrawOverlays(this)) {
             if (mGrantAttempted) {
-                // Une tentative a déjà eu lieu sans succès — ne pas boucler indéfiniment.
-                AppLogger.e(TAG, "SYSTEM_ALERT_WINDOW toujours refusée après tentative ADB — badge LOG non affiché");
+                // A previous attempt already failed — do not loop indefinitely.
+                AppLogger.e(TAG, "SYSTEM_ALERT_WINDOW still denied after ADB attempt — badge not shown");
                 return;
             }
             mGrantAttempted = true;
-            AppLogger.w(TAG, "SYSTEM_ALERT_WINDOW non accordée — tentative auto-grant via ADB…");
+            AppLogger.w(TAG, "SYSTEM_ALERT_WINDOW not granted — attempting auto-grant via ADB…");
             final android.os.Handler mainHandler =
                     new android.os.Handler(getMainLooper());
             AdbLocalClient.grantOverlayPermission(this, new AdbLocalClient.Callback() {
                 @Override
                 public void onSuccess(String report) {
-                    AppLogger.i(TAG, "SYSTEM_ALERT_WINDOW accordée via ADB ✓");
+                    AppLogger.i(TAG, "SYSTEM_ALERT_WINDOW granted via ADB ✓");
                     mainHandler.post(new Runnable() {
                         @Override public void run() {
-                            createOverlay(); // relance — canDrawOverlays() est désormais true
+                            createOverlay(); // retry — canDrawOverlays() is now true
                         }
                     });
                 }
                 @Override
                 public void onError(String error) {
-                    AppLogger.e(TAG, "Auto-grant SYSTEM_ALERT_WINDOW échoué: " + error
-                            + " — badge LOG non affiché");
+                    AppLogger.e(TAG, "Auto-grant SYSTEM_ALERT_WINDOW failed: " + error
+                            + " — badge not shown");
                 }
             });
             return;
         }
-        mGrantAttempted = false; // reset pour les redémarrages du service
+        mGrantAttempted = false; // reset for service restarts
         mWindowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         // Badge textuel compact
@@ -173,7 +173,7 @@ public class FloatingRemoteButton extends Service {
         try {
             mWindowManager.addView(mFloatView, params);
         } catch (Exception e) {
-            AppLogger.e(TAG, "addView overlay échoué — permission refusée ?", e);
+            AppLogger.e(TAG, "addView overlay failed — permission denied?", e);
             mFloatView = null;
         }
     }

@@ -24,9 +24,9 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
 
     private List<AppInfo> mApps = new ArrayList<>();
     private final OnSendToDashboardListener mListener;
-    // Package actuellement affiché sur le cluster (indicateur vert)
+    // Package currently displayed on the cluster (green indicator)
     private String mCurrentPackage = null;
-    // Package actuellement sur l'écran principal (bouton "→ Cluster" visible)
+    // Package currently on the main screen ("→ Cluster" button visible)
     private String mMainPackage = null;
     // Cache packageName → index dans mApps pour notifyItemChanged() O(1)
     private final HashMap<String, Integer> mPackageIndexMap = new HashMap<>();
@@ -45,7 +45,7 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
         notifyDataSetChanged();
     }
 
-    /** Met à jour l'indicateur de l'app actuellement sur le cluster. */
+    /** Updates the indicator for the app currently on the cluster. */
     public void setCurrentPackage(String packageName) {
         String old = mCurrentPackage;
         mCurrentPackage = packageName;
@@ -53,7 +53,7 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
         notifyPackageChanged(packageName);
     }
 
-    /** Met à jour l'indicateur de l'app actuellement sur l'écran principal. */
+    /** Updates the indicator for the app currently on the main display. */
     public void setMainPackage(String packageName) {
         String old = mMainPackage;
         mMainPackage = packageName;
@@ -62,7 +62,7 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
     }
 
     /**
-     * Notifie uniquement l'item correspondant au package donné — O(1) via HashMap.
+     * Notifies only the item matching the given package — O(1) via HashMap.
      */
     private void notifyPackageChanged(String packageName) {
         if (packageName == null) return;
@@ -83,7 +83,7 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
         holder.ivIcon.setImageDrawable(app.icon);
         holder.tvName.setText(app.appName);
 
-        // Indicateur vert + boutons : gérés selon l'état (cluster ou écran principal)
+        // Green indicator + buttons: managed based on state (cluster or main display)
         boolean isActive = app.packageName != null && app.packageName.equals(mCurrentPackage);
         boolean isOnMain = app.packageName != null && app.packageName.equals(mMainPackage);
         holder.viewActiveIndicator.setVisibility((isActive || isOnMain) ? View.VISIBLE : View.GONE);
@@ -122,7 +122,7 @@ public class AppListAdapter extends RecyclerView.Adapter<AppListAdapter.ViewHold
             btnToCluster        = (Button)    itemView.findViewById(R.id.btn_to_cluster);
             btnKill             = (Button)    itemView.findViewById(R.id.btn_kill_app);
 
-            // Tap sur la ligne entière = envoyer sur le cluster
+            // Tap on the entire row = send to cluster
             itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {

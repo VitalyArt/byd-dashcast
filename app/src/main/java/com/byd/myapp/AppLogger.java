@@ -18,22 +18,22 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * AppLogger — journal de bord structuré.
+ * AppLogger — structured in-app log buffer.
  *
- * Niveaux : DEBUG / INFO / WARN / ERROR (avec couleur dans LogActivity).
- * Chaque entrée capture : timestamp, niveau, tag, message, nom du thread.
- * Helpers timing : startTiming() / endTiming() pour mesurer les durées.
- * Backward-compat : log(tag, msg) existant → INFO.
+ * Levels: DEBUG / INFO / WARN / ERROR (color-coded in LogActivity).
+ * Each entry captures: timestamp, level, tag, message, thread name.
+ * Timing helpers: startTiming() / endTiming() for duration measurement.
+ * Backward-compat: log(tag, msg) → INFO.
  *
- * Thread-safe via CopyOnWriteArrayList (lecture sans lock, écriture copiée).
- * Buffer circulaire : MAX_ENTRIES = 3000 entrées.
+ * Thread-safe: uses a synchronized ArrayDeque with explicit lock.
+ * Circular buffer: MAX_ENTRIES = 3000 entries.
  */
 public class AppLogger {
 
     // ── Niveau de log ─────────────────────────────────────────────────────────
     public enum Level { DEBUG, INFO, WARN, ERROR }
 
-    // ── Entrée structurée ─────────────────────────────────────────────────────
+    // ── Structured log entry ──────────────────────────────────────────────────
     public static class Entry {
         public final long   timestamp;
         public final Level  level;
@@ -50,15 +50,15 @@ public class AppLogger {
         }
     }
 
-    // ── Buffer circulaire ─────────────────────────────────────────────────────
+    // ── Circular buffer ───────────────────────────────────────────────────────
     private static final int MAX_ENTRIES = 3000;
-    // Utilisation d'un ArrayDeque synchronisé au lieu de CopyOnWriteArrayList pour
-    // éviter une copie O(N) de 3000 éléments à chaque log, réduisant drastiquement la pression GC.
+    // Using a synchronized ArrayDeque instead of CopyOnWriteArrayList to avoid
+    // an O(N) copy of 3000 entries on every log call, reducing GC pressure.
     private static final java.util.ArrayDeque<Entry> sEntries = new java.util.ArrayDeque<>(MAX_ENTRIES + 1);
     private static final Object LOCK = new Object();
 
-    // SimpleDateFormat n'est pas thread-safe — un ThreadLocal par thread évite les allocations
-    // répétées sans risque de corruption.
+    // SimpleDateFormat is not thread-safe — one instance per thread via ThreadLocal
+    // avoids repeated allocations without risk of corruption.
     private static final ThreadLocal<SimpleDateFormat> sFmt = new ThreadLocal<SimpleDateFormat>() {
         @Override protected SimpleDateFormat initialValue() {
             return new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
@@ -71,24 +71,24 @@ public class AppLogger {
     };
     private AppLogger() {}
 
-    // ── Helper interne ────────────────────────────────────────────────────────
+    // ── Internal helper ───────────────────────────────────────────────────────
 
-    /** Ajoute une entrée dans le buffer circulaire avec allocation O(1). */
+    /** Adds an entry to the circular buffer with O(1) allocation. */
     private static void addEntry(Level level, String tag, String msg) {
         Entry e = new Entry(level, tag, msg);
         synchronized (LOCK) {
             if (sEntries.size() >= MAX_ENTRIES) {
-                sEntries.pollFirst(); // Retire le plus ancien
+                sEntries.pollFirst(); // Remove oldest entry
             }
             sEntries.addLast(e);
         }
     }
 
-    // ── Méthodes principales ──────────────────────────────────────────────────
+    // ── Public logging methods ────────────────────────────────────────────────
 
     public static void log(Level level, String tag, String msg) {
         addEntry(level, tag, msg);
-        // Miroir logcat
+        // Mirror to logcat
         switch (level) {
             case DEBUG: Log.d(tag, msg); break;
             case INFO:  Log.i(tag, msg); break;
@@ -105,14 +105,14 @@ public class AppLogger {
     public static void w(String tag, String msg) { log(Level.WARN,  tag, msg); }
     public static void e(String tag, String msg) { log(Level.ERROR, tag, msg); }
 
-    /** Variante avec Throwable — stocke le message + type d'exception dans le buffer,
-     *  délègue la stacktrace complète à Log.e() (visible dans logcat/ADB). */
+    /** Throwable variant — stores message + exception type in the buffer,
+     *  delegates the full stack trace to Log.e() (visible in logcat/ADB). */
     public static void e(String tag, String msg, Throwable t) {
         String full = t != null
                 ? msg + " [" + t.getClass().getSimpleName() + ": " + t.getMessage() + "]"
                 : msg;
         addEntry(Level.ERROR, tag, full);
-        Log.e(tag, msg, t); // stacktrace complète dans logcat
+        Log.e(tag, msg, t); // full stack trace in logcat
     }
 
     public static void w(String tag, String msg, Throwable t) {
@@ -123,49 +123,49 @@ public class AppLogger {
         Log.w(tag, msg, t);
     }
 
-    // ── Helpers timing ────────────────────────────────────────────────────────
+    // ── Timing helpers ────────────────────────────────────────────────────────
 
-    /** Démarre un chrono. À passer à endTiming(). */
+    /** Starts a timer. Pass the return value to endTiming(). */
     public static long startTiming() {
         return System.currentTimeMillis();
     }
 
-    /** Logue "[tag] msg (42 ms)" au niveau DEBUG. */
+    /** Logs "[tag] msg (42 ms)" at DEBUG level. */
     public static void endTiming(String tag, long start, String msg) {
         long ms = System.currentTimeMillis() - start;
         d(tag, msg + " (" + ms + " ms)");
     }
 
-    // ── Helper lifecycle ──────────────────────────────────────────────────────
+    // ── Lifecycle helper ──────────────────────────────────────────────────────
 
-    /** Log d'un événement lifecycle (DEBUG) avec nom de l'activity + thread. */
+    /** Logs a lifecycle event (DEBUG) with the activity name and thread name. */
     public static void lifecycle(String className, String event) {
         d("Lifecycle",
           className + " → " + event + "  [" + Thread.currentThread().getName() + "]");
     }
 
-    // ── Accès au buffer ───────────────────────────────────────────────────────
+    // ── Buffer access ─────────────────────────────────────────────────────────
 
-    /** Retourne le nombre d'entrées dans le buffer sans allouer de copie. */
+    /** Returns the number of entries in the buffer without allocating a copy. */
     public static int getEntriesCount() {
         synchronized (LOCK) {
             return sEntries.size();
         }
     }
 
-    /** Retourne une copie immuable du buffer (pour LogActivity). */
+    /** Returns an immutable copy of the buffer (used by LogActivity). */
     public static List<Entry> getEntries() {
         synchronized (LOCK) {
             return Collections.unmodifiableList(new ArrayList<>(sEntries));
         }
     }
 
-    /** Retourne le buffer complet en String formatée (pour partage texte). */
+    /** Returns the full buffer as a formatted String (for text sharing). */
     public static String get() {
         SimpleDateFormat fmt = sFmt.get();
         StringBuilder sb;
         synchronized (LOCK) {
-            sb = new StringBuilder(sEntries.size() * 80); // ~80 caractères par ligne pour éviter les réallocations coûteuses
+            sb = new StringBuilder(sEntries.size() * 80); // ~80 chars per line — avoids costly reallocations
             for (Entry e : sEntries) {
                 sb.append("[").append(fmt.format(new Date(e.timestamp))).append("]")
                   .append("[").append(e.level.name()).append("]")
@@ -182,12 +182,12 @@ public class AppLogger {
         }
     }
 
-    // ── Sauvegarde fichier ────────────────────────────────────────────────────
+    // ── File save ─────────────────────────────────────────────────────────────
 
     /**
-     * Écrit le journal dans un fichier .log horodaté dans getExternalFilesDir().
-     * Récupérable via : adb pull /sdcard/Android/data/com.byd.myapp/files/
-     * @return le File créé, ou null en cas d'erreur
+     * Writes the log buffer to a timestamped .log file in getExternalFilesDir().
+     * Retrievable via: adb pull /sdcard/Android/data/com.byd.myapp/files/
+     * @return the created File, or null on error
      */
     public static File saveToFile(Context context) {
         String filename = "byd_log_"
@@ -200,22 +200,22 @@ public class AppLogger {
         try (FileWriter fw = new FileWriter(outFile)) {
             fw.write(get());
         } catch (IOException ex) {
-            Log.e("AppLogger", "saveToFile échec", ex);
+            Log.e("AppLogger", "saveToFile failed", ex);
             return null;
         }
         return outFile;
     }
 
-    // ── Partage ───────────────────────────────────────────────────────────────
+    // ── Share ─────────────────────────────────────────────────────────────────
 
     /**
-     * Sauvegarde le journal dans un fichier .log puis ouvre le share chooser
-     * avec le fichier en pièce jointe (content:// via FileProvider).
-     * Fallback texte brut si l'écriture échoue.
+     * Saves the log to a .log file then opens the share chooser with the file
+     * as an attachment (content:// via FileProvider).
+     * Falls back to plain text if the file write fails.
      */
     public static void share(Context context) {
         Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.putExtra(Intent.EXTRA_SUBJECT, "MyBYDApp — Journal de bord");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "MyBYDApp — Log");
         File logFile = saveToFile(context);
         if (logFile != null) {
             Uri uri = FileProvider.getUriForFile(
@@ -224,33 +224,33 @@ public class AppLogger {
             intent.putExtra(Intent.EXTRA_STREAM, uri);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else {
-            // Fallback : partage texte brut
+            // Fallback: share as plain text
             String content = get();
-            if (content.isEmpty()) content = "(journal vide)";
+            if (content.isEmpty()) content = "(empty log)";
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_TEXT, content);
         }
-        context.startActivity(Intent.createChooser(intent, "Partager le journal…"));
+        context.startActivity(Intent.createChooser(intent, "Share log…"));
     }
 
     public static void shareWithReport(Context context, String reportText) {
         String combined = reportText
                 + "\n\n════════════════════════════════════\n"
-                + "JOURNAL DE BORD\n"
+                + "LOG\n"
                 + "════════════════════════════════════\n"
                 + get();
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/plain");
-        intent.putExtra(Intent.EXTRA_SUBJECT, "MyBYDApp — Rapport + Journal");
+        intent.putExtra(Intent.EXTRA_SUBJECT, "MyBYDApp — Report + Log");
         intent.putExtra(Intent.EXTRA_TEXT, combined);
-        context.startActivity(Intent.createChooser(intent, "Partager le rapport…"));
+        context.startActivity(Intent.createChooser(intent, "Share report…"));
     }
 
     /**
-     * Sauvegarde un texte arbitraire dans un fichier .log horodaté puis ouvre
-     * le share chooser avec le fichier en pièce jointe (content:// via
-     * FileProvider). Préfixe le nom du fichier par `prefix`.
-     * Fallback texte brut si l'écriture échoue.
+     * Saves arbitrary text to a timestamped .log file then opens the share
+     * chooser with the file as an attachment (content:// via FileProvider).
+     * The file name is prefixed with `prefix`.
+     * Falls back to plain text if the file write fails.
      */
     public static void shareTextAsFile(Context context, String prefix, String content,
             String chooserTitle) {
@@ -266,7 +266,7 @@ public class AppLogger {
             fw.write(content);
             fileOk = true;
         } catch (IOException ex) {
-            Log.e("AppLogger", "shareTextAsFile écriture échec", ex);
+            Log.e("AppLogger", "shareTextAsFile write failed", ex);
         }
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/plain");

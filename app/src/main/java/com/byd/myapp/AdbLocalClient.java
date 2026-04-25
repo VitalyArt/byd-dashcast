@@ -15,39 +15,39 @@ import java.io.ObjectOutputStream;
 import java.util.HashMap;
 
 /**
- * AdbLocalClient — se connecte au daemon ADB local (localhost:5555) depuis l'intérieur
- * de la tablette, en utilisant la bibliothèque dadb (identique à Overdrive).
+ * AdbLocalClient — connects to the local ADB daemon (localhost:5555) from inside
+ * the tablet, using the dadb library (same approach as Overdrive).
  *
- * Flux :
- *  1. Génère (ou recharge) une paire de clés RSA ADB stockée dans les fichiers internes.
- *  2. Dadb.create() initie la connexion → adbd envoie un challenge → dadb répond avec
- *     la signature RSA → si la clé est inconnue, le système affiche le popup
- *     "Autoriser le débogage USB ?" sur l'écran de la tablette.
- *  3. Trois passages d'escalade :
- *     [1] setprop persist.sys.acc.whitelist — mécanisme BYD DiLink natif
- *     [2] abb_exec package grant — via Binder direct (Android 9+)
- *     [3] Énumération des services BYD dans service list (préparation proxy)
+ * Flow:
+ *  1. Generates (or reloads) an RSA ADB key pair stored in internal files.
+ *  2. Dadb.create() initiates the connection → adbd sends a challenge → dadb replies with
+ *     the RSA signature → if the key is unknown, the system shows the popup
+ *     "Allow USB debugging?" on the tablet screen.
+ *  3. Three escalation passes:
+ *     [1] setprop persist.sys.acc.whitelist — BYD DiLink native mechanism
+ *     [2] abb_exec package grant — via direct Binder (Android 9+)
+ *     [3] BYD service enumeration via service list (proxy preparation)
  *
- * La paire de clés est persistée → le popup n'apparaît qu'une seule fois (ou après
- * révocation manuelle dans les paramètres développeur du véhicule).
+ * The key pair is persisted → the popup appears only once (or after
+ * manual revocation in the vehicle's developer settings).
  */
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AdbLocalClient {
-    // Limité à 4 threads pour éviter un OutOfMemoryError ou une saturation socket
-    // si l'utilisateur martèle l'UI de clics provoquant des commandes lentes ADB.
+    // Capped at 4 threads to avoid OutOfMemoryError or socket exhaustion
+    // if the user hammers the UI triggering slow ADB commands.
     private static final ExecutorService sExecutor = Executors.newFixedThreadPool(4);
 
     private static final String TAG = "AdbLocalClient";
 
-    /** Port ADB TCP — identique pour Android 7–10 en mode développeur */
+    /** ADB TCP port — same for Android 7–10 in developer mode */
     private static final int ADB_PORT = 5555;
 
     // -------------------------------------------------------------------------
 
     /**
-     * Exécute une commande shell brute via ADB local (asynchrone).
+     * Executes a raw shell command via local ADB (asynchronous).
      */
     public static void executeShell(final Context context, final String command) {
         sExecutor.execute(new Runnable() {
@@ -57,13 +57,13 @@ public class AdbLocalClient {
                     AppLogger.d(TAG, "executeShell: " + command + " -> " + r.getAllOutput().trim());
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-                    AppLogger.e(TAG, "executeShell ERREUR pour: " + command, e);
+                    AppLogger.e(TAG, "executeShell ERROR for: " + command, e);
                 }
             }
         });
     }
 
-    /** Exécute une commande shell et retourne le résultat via callback (thread background). */
+    /** Executes a shell command and returns the result via callback (background thread). */
     public static void executeShellWithResult(final Context context, final String command,
                                               final Callback callback) {
         sExecutor.execute(() -> {
@@ -73,16 +73,16 @@ public class AdbLocalClient {
                 if (callback != null) callback.onSuccess(output);
             } catch (Exception e) {
                 if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-                AppLogger.e(TAG, "executeShellWithResult ERREUR: " + command, e);
+                AppLogger.e(TAG, "executeShellWithResult ERROR: " + command, e);
                 if (callback != null) callback.onError(e.getMessage());
             }
         });
     }
 
     public interface Callback {
-        /** Appelé sur un thread background quand la connexion + les grants sont terminés. */
+        /** Called on a background thread when the connection + grants are complete. */
         void onSuccess(String report);
-        /** Appelé si la connexion échoue (port fermé, timeout, refus…). */
+        /** Called if the connection fails (port closed, timeout, refused…). */
         void onError(String error);
     }
 
@@ -93,13 +93,13 @@ public class AdbLocalClient {
 
     // ── Freedom state ─────────────────────────────────────────────────────────
 
-    /** État de Freedom (com.xdja.clusterdemo) — prérequis à toute diffusion cluster. */
+    /** Freedom state (com.xdja.clusterdemo) — required before any cluster projection. */
     public enum FreedomStatus {
-        /** com.xdja.clusterdemo n'est pas installé sur le système. */
+        /** com.xdja.clusterdemo is not installed on the system. */
         NOT_INSTALLED,
-        /** Installé mais inactif : fission VirtualDisplay absent — display 1 inaccessible. */
+        /** Installed but inactive: fission VirtualDisplay absent — display 1 inaccessible. */
         INACTIVE,
-        /** Actif en mode 全屏导航 : fission VirtualDisplay présent — display 1 accessible. */
+        /** Active in 全屏导航 mode: fission VirtualDisplay present — display 1 accessible. */
         ACTIVE
     }
 
@@ -108,26 +108,26 @@ public class AdbLocalClient {
     }
 
     /**
-     * Vérifie l'état de Freedom via ADB (thread background).
+     * Checks Freedom state via ADB (background thread).
      *
-     * Deux tests en séquence :
-     *   1. pm list packages com.xdja.clusterdemo → NOT_INSTALLED si absent
-     *   2. dumpsys display | grep -i fission      → ACTIVE si présent, INACTIVE sinon
+     * Two sequential tests:
+     *   1. pm list packages com.xdja.clusterdemo → NOT_INSTALLED if absent
+     *   2. ps -A | grep com.xdja.clusterdemo     → ACTIVE if process found, INACTIVE otherwise
      *
-     * Rappel : Freedom OFF = display 1 absent de DisplayManager (confirmé 18/04/2026).
-     * En cas d'erreur ADB, on retourne INACTIVE (déclenchera startFreedom en fallback).
+     * Note: Freedom OFF = display 1 absent from DisplayManager (confirmed 18/04/2026).
+     * On ADB error, returns INACTIVE (will trigger startFreedom as fallback).
      */
-    // Pattern grep avec trick [m] pour éviter que grep ne se matche lui-même.
-    // "[m]irrordaemon" matche "mirrordaemon" dans les noms de process mais pas
-    // dans le cmdline du grep (qui contient littéralement "[m]irrordaemon").
+    // Grep pattern uses the [m] trick to prevent grep from matching its own cmdline.
+    // "[m]irrordaemon" matches "mirrordaemon" in process names but not in the
+    // grep cmdline (which literally contains "[m]irrordaemon").
     private static final String DAEMON_GREP = "grep -E '[m]irrordaemon'";
     private static final String KILL_DAEMON_CMD =
             "ps -A | " + DAEMON_GREP + " | awk '{print $2}'" +
             " | xargs -r kill -9 2>/dev/null; echo killed";
 
     /**
-     * Scanne les processus MirrorDaemon actifs et retourne un résumé lisible.
-     * Format : "PID  USER  NAME\n..." ou "(aucun processus trouvé)"
+     * Scans active MirrorDaemon processes and returns a human-readable summary.
+     * Format: "PID  USER  NAME\n..." or "(no process found)"
      */
     public static void scanMirrorDaemon(final Context context, final Callback callback) {
         sExecutor.execute(() -> {
@@ -137,40 +137,40 @@ public class AdbLocalClient {
                 boolean found = !ps.isEmpty();
                 int count = found ? ps.split("\n").length : 0;
                 String msg = found
-                        ? count + " processus MirrorDaemon détecté(s) :\n" + ps
-                        : "(aucun processus MirrorDaemon actif)";
-                AppLogger.i(TAG, "scanMirrorDaemon : " + msg);
+                        ? count + " MirrorDaemon process(es) detected:\n" + ps
+                        : "(no active MirrorDaemon process)";
+                AppLogger.i(TAG, "scanMirrorDaemon: " + msg);
                 if (callback != null) callback.onSuccess(msg);
             } catch (Exception e) {
-                AppLogger.e(TAG, "scanMirrorDaemon échoué", e);
-                if (callback != null) callback.onError("Erreur scan : " + e.getMessage());
+                AppLogger.e(TAG, "scanMirrorDaemon failed", e);
+                if (callback != null) callback.onError("Scan error: " + e.getMessage());
             }
         });
     }
 
     /**
-     * Tue tous les processus MirrorDaemon existants et confirme le résultat via callback.
+     * Kills all existing MirrorDaemon processes and confirms the result via callback.
      */
     public static void killMirrorDaemon(final Context context, final Callback callback) {
         sExecutor.execute(() -> {
             try (Dadb dadb = connect(context)) {
                 String before = safeOut(dadb.shell(
                         "ps -A | " + DAEMON_GREP + " 2>&1").getAllOutput()).trim();
-                AppLogger.i(TAG, "killMirrorDaemon — avant : " + (before.isEmpty() ? "(aucun)" : before));
+                AppLogger.i(TAG, "killMirrorDaemon — before: " + (before.isEmpty() ? "(none)" : before));
                 dadb.shell(KILL_DAEMON_CMD);
                 Thread.sleep(800);
                 String after = safeOut(dadb.shell(
                         "ps -A | " + DAEMON_GREP + " 2>&1").getAllOutput()).trim();
                 boolean ok = after.isEmpty();
                 String msg = ok
-                        ? "MirrorDaemon(s) tué(s) ✓"
-                        : "Processus encore présents : " + after;
-                AppLogger.i(TAG, "killMirrorDaemon — après : " + msg);
+                        ? "MirrorDaemon(s) killed ✓"
+                        : "Processes still running: " + after;
+                AppLogger.i(TAG, "killMirrorDaemon — after: " + msg);
                 if (ok) { if (callback != null) callback.onSuccess(msg); }
                 else    { if (callback != null) callback.onError(msg); }
             } catch (Exception e) {
-                AppLogger.e(TAG, "killMirrorDaemon échoué", e);
-                if (callback != null) callback.onError("Erreur : " + e.getMessage());
+                AppLogger.e(TAG, "killMirrorDaemon failed", e);
+                if (callback != null) callback.onError("Error: " + e.getMessage());
             }
         });
     }
@@ -179,26 +179,26 @@ public class AdbLocalClient {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 try (Dadb dadb = connect(context)) {
-                    // Tuer l'ancien daemon si présent.
-                    // IMPORTANT : le daemon se renomme en "com.byd.myapp.mirrordaemon" via
-                    // setArgV0(), pas "byd.mirror.daemon" → grep sur les deux patterns.
+                    // Kill existing daemon if present.
+                    // IMPORTANT: the daemon renames itself to "com.byd.myapp.mirrordaemon" via
+                    // setArgV0(), not "byd.mirror.daemon" → grep on both patterns.
                     String psOut = safeOut(dadb.shell(
                             "ps -A | " + DAEMON_GREP + " 2>&1").getAllOutput());
                     if (!psOut.trim().isEmpty()) {
                         dadb.shell(KILL_DAEMON_CMD);
-                        AppLogger.i(TAG, "Ancien(s) MirrorDaemon tué(s).");
+                        AppLogger.i(TAG, "Old MirrorDaemon(s) killed.");
                         Thread.sleep(500);
                     }
                     String apkPath = context.getPackageCodePath();
-                    // Horodatage Java → nom de fichier unique à chaque lancement
+                    // Java timestamp → unique filename per launch
                     String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
                             .format(new java.util.Date());
                     final String logPath = "/data/local/tmp/mirrordaemon_" + ts + ".log";
                     final String latestLink = "/data/local/tmp/mirrordaemon_latest.log";
-                    // setsid : détache le processus du groupe de la session ADB
-                    // → survit à la fermeture de la connexion dadb (sinon SIGHUP possible)
-                    // CLASSPATH inline (pas export &&) comme le fait Commander APK
-                    // -Xnoimage-dex2oat : évite crash AOT au démarrage
+                    // setsid: detaches the process from the ADB session group
+                    // → survives dadb connection close (otherwise SIGHUP possible)
+                    // CLASSPATH inline (no export &&) as Commander APK does it
+                    // -Xnoimage-dex2oat: avoids AOT crash at startup
                     String cmd = "setsid sh -c 'CLASSPATH=" + apkPath
                             + " /system/bin/app_process64 -Xnoimage-dex2oat /system/bin"
                             + " --nice-name=byd.mirror.daemon"
@@ -206,16 +206,16 @@ public class AdbLocalClient {
                             + " </dev/null >" + logPath + " 2>&1' &"
                             + " ln -sf " + logPath + " " + latestLink;
                     dadb.shell(cmd);
-                    AppLogger.i(TAG, "MirrorDaemon lancé → " + logPath);
+                    AppLogger.i(TAG, "MirrorDaemon launched → " + logPath);
 
-                    // Vérification : le process est-il bien vivant après 3s ?
+                    // Verification: is the process alive after 3s?
                     Thread.sleep(3000);
                     String psCheck = safeOut(dadb.shell(
                             "ps -A | " + DAEMON_GREP + " 2>&1").getAllOutput());
                     if (!psCheck.trim().isEmpty()) {
-                        AppLogger.i(TAG, "MirrorDaemon ACTIF ✓  " + psCheck.trim());
+                        AppLogger.i(TAG, "MirrorDaemon ACTIVE ✓  " + psCheck.trim());
                     } else {
-                        AppLogger.e(TAG, "MirrorDaemon INTROUVABLE après 3s — lecture log :");
+                        AppLogger.e(TAG, "MirrorDaemon NOT FOUND after 3s — reading log:");
                         String logContent = safeOut(dadb.shell("cat " + logPath + " 2>&1").getAllOutput());
                         AppLogger.e(TAG, "mirrordaemon.log = [" + logContent + "]");
                     }
@@ -226,8 +226,8 @@ public class AdbLocalClient {
         });
     }
 
-    // Patterns sniffer : trick [x] pour éviter l'auto-match du grep.
-    // Le sniffer lance deux processus background : logcat (capture) + sh/sleep (snapshots).
+    // Sniffer grep patterns: [x] trick to avoid auto-matching.
+    // The sniffer spawns two background processes: logcat (capture) + sh/sleep (snapshots).
     private static final String SNIFFER_GREP =
             "grep -E '[l]ogcat -v threadtime|[s]leep 30'";
     public static final String SNIFFER_KILL_CMD =
@@ -249,25 +249,25 @@ public class AdbLocalClient {
                 boolean hasLoop   = !sleepPs.isEmpty();
                 String msg;
                 if (!hasLogcat && !hasLoop) {
-                    msg = "(aucun processus Sniffer actif)";
+                    msg = "(no active Sniffer process)";
                 } else {
                     StringBuilder sb = new StringBuilder();
                     int count = 0;
                     if (hasLogcat) {
-                        sb.append("logcat (capture) :\n").append(logcatPs).append("\n");
+                        sb.append("logcat (capture):\n").append(logcatPs).append("\n");
                         count++;
                     }
                     if (hasLoop) {
-                        sb.append("sleep/snapshot loop :\n").append(sleepPs);
+                        sb.append("sleep/snapshot loop:\n").append(sleepPs);
                         count++;
                     }
-                    msg = count + " processus Sniffer détecté(s) :\n" + sb.toString().trim();
+                    msg = count + " Sniffer process(es) detected:\n" + sb.toString().trim();
                 }
-                AppLogger.i(TAG, "scanSniffer : " + msg);
+                AppLogger.i(TAG, "scanSniffer: " + msg);
                 if (callback != null) callback.onSuccess(msg);
             } catch (Exception e) {
-                AppLogger.e(TAG, "scanSniffer échoué", e);
-                if (callback != null) callback.onError("Erreur scan : " + e.getMessage());
+                AppLogger.e(TAG, "scanSniffer failed", e);
+                if (callback != null) callback.onError("Scan error: " + e.getMessage());
             }
         });
     }
@@ -285,13 +285,13 @@ public class AdbLocalClient {
                 String sleepAfter = safeOut(dadb.shell(
                         "ps -A | grep '[s]leep 30' 2>&1").getAllOutput()).trim();
                 boolean ok = logcatAfter.isEmpty() && sleepAfter.isEmpty();
-                String msg = ok ? "Sniffer arrêté ✓" : "Processus encore actifs : " + logcatAfter + " " + sleepAfter;
-                AppLogger.i(TAG, "killSniffer : " + msg);
+                String msg = ok ? "Sniffer stopped ✓" : "Processes still active: " + logcatAfter + " " + sleepAfter;
+                AppLogger.i(TAG, "killSniffer: " + msg);
                 if (ok) { if (callback != null) callback.onSuccess(msg); }
                 else    { if (callback != null) callback.onError(msg); }
             } catch (Exception e) {
-                AppLogger.e(TAG, "killSniffer échoué", e);
-                if (callback != null) callback.onError("Erreur : " + e.getMessage());
+                AppLogger.e(TAG, "killSniffer failed", e);
+                if (callback != null) callback.onError("Error: " + e.getMessage());
             }
         });
     }
@@ -300,31 +300,31 @@ public class AdbLocalClient {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 try (Dadb dadb = connect(context)) {
-                    // 1. Freedom installé ?
+                    // 1. Is Freedom installed?
                     String pkgOut = safeOut(dadb.shell(
                             "pm list packages com.xdja.clusterdemo 2>&1").getAllOutput()).trim();
                     if (!pkgOut.contains("com.xdja.clusterdemo")) {
-                        AppLogger.w(TAG, "checkFreedomState: non installé");
+                        AppLogger.w(TAG, "checkFreedomState: not installed");
                         callback.onResult(FreedomStatus.NOT_INSTALLED);
                         return;
                     }
-                    // 2. Freedom tourne-t-il vraiment en mémoire ?
-                    //    ATTENTION: on ne vérifie plus "dumpsys display | grep fission" !
-                    //    Le VirtualDisplay fission est géré par AutoDisplayService et reste ALWAYS présent
-                    //    même quand Freedom est force-stop. On doit vérifier la présence du procesus.
+                    // 2. Is Freedom actually running in memory?
+                    //    NOTE: we no longer check "dumpsys display | grep fission"!
+                    //    The fission VirtualDisplay is managed by AutoDisplayService and is ALWAYS present
+                    //    even when Freedom is force-stopped. We must check for the process instead.
                     String pidOut = safeOut(dadb.shell(
                             "ps -A | grep com.xdja.clusterdemo 2>&1").getAllOutput()).trim();
                     if (!pidOut.isEmpty()) {
                         AppLogger.i(TAG, "checkFreedomState: ACTIVE (process found)");
                         callback.onResult(FreedomStatus.ACTIVE);
                     } else {
-                        AppLogger.i(TAG, "checkFreedomState: INACTIVE (processus absent)");
+                        AppLogger.i(TAG, "checkFreedomState: INACTIVE (process not found)");
                         callback.onResult(FreedomStatus.INACTIVE);
                     }
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-                    AppLogger.e(TAG, "checkFreedomState ERREUR", e);
-                    callback.onResult(FreedomStatus.INACTIVE); // fallback → startFreedom tenté
+                    AppLogger.e(TAG, "checkFreedomState ERROR", e);
+                    callback.onResult(FreedomStatus.INACTIVE); // fallback → startFreedom will be tried
                 }
             }
         }); // adb-check-freedom
@@ -333,12 +333,12 @@ public class AdbLocalClient {
     // -------------------------------------------------------------------------
 
     /**
-     * Lance la connexion ADB locale dans un thread background.
+     * Starts the local ADB connection in a background thread.
      *
-     * Stratégie :
-     *  1. setprop persist.sys.acc.whitelist — mécanisme BYD-spécifique (DiLink whitelist)
-     *  2. abb_exec package grant — essai via Binder direct (UID 1000 possible sur certaines ROM)
-     *  3. Énumération des services BYD disponibles via service list (pour un futur proxy)
+     * Strategy:
+     *  1. setprop persist.sys.acc.whitelist — BYD-specific mechanism (DiLink whitelist)
+     *  2. abb_exec package grant — attempt via direct Binder (UID 1000 possible on some ROMs)
+     *  3. BYD service enumeration via service list (for future proxy)
      */
     public static void connectAndGrant(final Context context, final Callback callback) {
         sExecutor.execute(() -> {
@@ -348,24 +348,24 @@ public class AdbLocalClient {
                 boolean newKey  = !privateKey.exists() || !publicKey.exists();
 
                 AppLogger.log(TAG, newKey
-                        ? "Nouvelle clé ADB générée → popup attendu"
-                        : "Clé ADB existante rechargée");
-                AppLogger.log(TAG, "Connexion dadb → localhost:" + ADB_PORT + " …");
+                        ? "New ADB key generated → popup expected"
+                        : "Existing ADB key reloaded");
+                AppLogger.log(TAG, "Connecting dadb → localhost:" + ADB_PORT + " …");
                 try (Dadb dadb = connect(context)) {
-                AppLogger.log(TAG, "Connexion ADB établie ✓");
+                AppLogger.log(TAG, "ADB connection established ✓");
 
                 StringBuilder sb = new StringBuilder();
                 String pkg = context.getPackageName();
 
-                // ── PASSE 1 : persist.sys.acc.whitelist (mécanisme BYD DiLink) ──────────
+                // ── PASS 1: persist.sys.acc.whitelist (BYD DiLink mechanism) ─────────────
                 sb.append("=== [1] BYD DiLink whitelist ===\n");
 
-                // Lire la valeur courante
+                // Read current value
                 AdbShellResponse rGet = dadb.shell("getprop persist.sys.acc.whitelist 2>&1");
                 String currentWhitelist = rGet.getAllOutput().trim();
-                sb.append("Valeur actuelle : '").append(currentWhitelist).append("'\n");
+                sb.append("Current value: '").append(currentWhitelist).append("'\n");
 
-                // Ajouter notre package si pas déjà présent
+                // Add our package if not already present
                 String newVal = currentWhitelist.isEmpty() ? pkg
                         : (currentWhitelist.contains(pkg) ? currentWhitelist
                         : currentWhitelist + "," + pkg);
@@ -373,30 +373,30 @@ public class AdbLocalClient {
                 AdbShellResponse rSet = dadb.shell(
                         "setprop persist.sys.acc.whitelist \"" + newVal + "\" 2>&1 && echo SETPROP_OK");
                 boolean setpropOk = rSet.getAllOutput().contains("SETPROP_OK");
-                sb.append("setprop : ").append(setpropOk ? "OK" : "ERREUR — " + rSet.getAllOutput().trim()).append("\n");
+                sb.append("setprop: ").append(setpropOk ? "OK" : "ERROR — " + rSet.getAllOutput().trim()).append("\n");
 
                 if (setpropOk) {
-                    // Vérifier que la valeur a bien été persistée
+                    // Verify the value was persisted
                     AdbShellResponse rVerify = dadb.shell("getprop persist.sys.acc.whitelist");
-                    sb.append("Valeur après : '").append(rVerify.getAllOutput().trim()).append("'\n");
-                    sb.append("\n⚠ Whitelist mise à jour.\n")
-                      .append("→ Fermez complètement l'application puis relancez-la.\n")
-                      .append("  Si ça fonctionne, les *_GET seront accordés au redémarrage.\n");
+                    sb.append("Value after: '").append(rVerify.getAllOutput().trim()).append("'\n");
+                    sb.append("\n⚠ Whitelist updated.\n")
+                      .append("→ Fully close the app then relaunch it.\n")
+                      .append("  If it works, *_GET permissions will be granted on next reboot.\n");
                 } else {
-                    sb.append("→ setprop refusé (propriété protégée sur cette ROM).\n");
+                    sb.append("→ setprop refused (protected property on this ROM).\n");
                 }
                 sb.append("\n");
 
-                // ── PASSE 2 : test pm grant sur _COMMON (dangerous?) et _GET (signature) ──
+                // ── PASS 2: test pm grant on _COMMON (dangerous?) and _GET (signature) ──
                 boolean abbSupported = dadb.supportsFeature("abb_exec");
-                sb.append("=== [2] abb_exec disponible : ").append(abbSupported).append(" ===\n");
+                sb.append("\n=== [2] abb_exec available: ").append(abbSupported).append(" ===\n");
 
-                // Vérifier l'UID effectif
+                // Check effective UID
                 AdbShellResponse rUid = dadb.shell("id 2>&1");
-                sb.append("UID shell : ").append(rUid.getAllOutput().trim()).append("\n");
+                sb.append("Shell UID: ").append(rUid.getAllOutput().trim()).append("\n");
 
-                // _COMMON : dangerous confirmé → pm grant fonctionne (toutes accordées ici)
-                // _GET    : signature confirmés — toujours refusés via pm grant
+                // _COMMON: dangerous — pm grant works (all granted here)
+                // _GET:    signature — always refused via pm grant
                 String[] commonPerms = {
                     "android.permission.BYDAUTO_SPEED_COMMON",
                     "android.permission.BYDAUTO_ENERGY_COMMON",
@@ -409,7 +409,7 @@ public class AdbLocalClient {
                     "android.permission.BYDAUTO_LIGHT_COMMON",
                     "android.permission.BYDAUTO_TYRE_COMMON",
                     "android.permission.BYDAUTO_RADAR_COMMON",
-                    // SAFETYBELT_COMMON retirée : Unknown permission sur ROM Seal EU
+                    // SAFETYBELT_COMMON removed: unknown permission on Seal EU ROM
                     // "android.permission.BYDAUTO_SAFETYBELT_COMMON",
                 };
                 String[] getPerms = {
@@ -417,49 +417,49 @@ public class AdbLocalClient {
                     "android.permission.BYDAUTO_ENERGY_GET",
                     "android.permission.BYDAUTO_GEARBOX_GET",
                 };
-                sb.append("── pm grant ALL _COMMON (dangerous confirmé) ──\n");
+                sb.append("\n── pm grant ALL _COMMON (dangerous) ──\n");
                 for (String perm : commonPerms) {
                     String shortName = perm.replace("android.permission.BYDAUTO_", "");
                     AdbShellResponse r = dadb.shell("pm grant " + pkg + " " + perm + " 2>&1 && echo GRANTED || echo DENIED");
                     String out = r.getAllOutput().trim();
                     sb.append(shortName).append(": ").append(
-                        out.contains("GRANTED") ? "OK ✓ (dangerous — accordée)" :
-                        out.contains("not a changeable") ? "SIGNATURE — non accordable via pm" :
-                        out.contains("Unknown permission") ? "⚠️ Non disponible sur cette ROM" :
+                        out.contains("GRANTED") ? "OK ✓ (dangerous — granted)" :
+                        out.contains("not a changeable") ? "SIGNATURE — not grantable via pm" :
+                        out.contains("Unknown permission") ? "⚠️ Not available on this ROM" :
                         out).append("\n");
                 }
-                sb.append("── pm grant _GET (signature confirmés — pour référence) ──\n");
+                sb.append("── pm grant _GET (signature — for reference) ──\n");
                 for (String perm : getPerms) {
                     String shortName = perm.replace("android.permission.BYDAUTO_", "");
                     AdbShellResponse r = dadb.shell("pm grant " + pkg + " " + perm + " 2>&1 && echo GRANTED || echo DENIED");
                     String out = r.getAllOutput().trim();
                     sb.append(shortName).append(": ").append(
-                        out.contains("GRANTED") ? "OK ✓ (inattendu)" :
-                        out.contains("not a changeable") ? "SIGNATURE (attendu)" :
+                        out.contains("GRANTED") ? "OK ✓ (unexpected)" :
+                        out.contains("not a changeable") ? "SIGNATURE (expected)" :
                         out).append("\n");
                 }
                 sb.append("\n");
 
-                // ── PASSE 3 : énumération des services BYD (pour proxy futur) ──────────
+                // ── PASS 3: BYD service enumeration (for future proxy) ─────────────────────
                 sb.append("=== [3] Services BYD accessibles via shell ===\n");
                 AdbShellResponse rSvc = dadb.shell(
                         "service list 2>/dev/null | grep -i 'byd\\|auto\\|vehicle\\|car' | head -20");
-                sb.append(rSvc.getAllOutput().isEmpty() ? "(aucun service BYD trouvé)\n" : rSvc.getAllOutput());
+                sb.append(rSvc.getAllOutput().isEmpty() ? "(no BYD service found)\n" : rSvc.getAllOutput());
 
-                // Vérifier si /proc ou /sys expose des données véhicule
+                // Check if /proc or /sys expose vehicle data
                 AdbShellResponse rSys = dadb.shell(
                         "ls /sys/class/byd* /proc/byd* /data/system/byd* 2>/dev/null | head -10");
                 if (!rSys.getAllOutput().trim().isEmpty()) {
-                    sb.append("Fichiers système BYD :\n").append(rSys.getAllOutput().trim()).append("\n");
+                    sb.append("BYD system files:\n").append(rSys.getAllOutput().trim()).append("\n");
                 }
                 sb.append("\n");
 
-                // ── État final des permissions (dump brut + grep large) ───────────────
-                // Le format BYD ROM peut différer du AOSP standard — on dump la section
-                // "declared permissions" + "install permissions" + "runtime permissions"
+                // ── Final permission state (raw dump + broad grep) ────────────────────────
+                // BYD ROM format may differ from AOSP standard — dump the
+                // "declared permissions" + "install permissions" + "runtime permissions" sections
                 AdbShellResponse rFinal = dadb.shell(
                         "dumpsys package " + pkg + " 2>/dev/null | grep -iE 'bydauto|BYDAUTO|requested perm|install perm|runtime perm|grantedPermissions' | head -40");
-                sb.append("=== Permissions actuelles (dump brut) ===\n");
+                sb.append("=== Current permissions (raw dump) ===\n");
                 String finalOut = rFinal.getAllOutput().trim();
                 if (finalOut.isEmpty()) {
                     // Fallback : dump complet de la section permissions
@@ -467,26 +467,26 @@ public class AdbLocalClient {
                             "dumpsys package " + pkg + " 2>/dev/null | grep -A2 -E 'permission|Permission' | grep -iE 'byd|granted|denied' | head -30");
                     finalOut = rFull.getAllOutput().trim();
                 }
-                sb.append(finalOut.isEmpty() ? "(aucune entrée — vérifier APK installé)" : finalOut).append("\n");
+                sb.append(finalOut.isEmpty() ? "(no entries — check APK is installed)" : finalOut).append("\n");
 
-                AppLogger.log(TAG, "ADB local terminé ✓");
+                AppLogger.log(TAG, "ADB local finished ✓");
                 callback.onSuccess(sb.toString());
                 }
 
             } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                 String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-                AppLogger.e(TAG, "Échec ADB local", e);
-                AppLogger.log(TAG, "ADB local ERREUR — " + msg);
+                AppLogger.e(TAG, "ADB local failed", e);
+                AppLogger.log(TAG, "ADB local ERROR — " + msg);
                 callback.onError(msg);
             }
         }); // adb-local-thread
     }
 
-    // ── Helper privé — connexion dadb (clé déjà autorisée, pas de popup) ───────────
+    // ── Private helper — dadb connection (key already authorized, no popup) ───────────
 
-    /** Verrou pour la génération des clés : évite le TOCTOU si deux méthodes ADB sont appelées
-     *  simultanément au premier lancement (avant que les fichiers .key/.pub existent). */
+    /** Lock for key generation: prevents TOCTOU if two ADB methods are called
+     *  simultaneously on first launch (before .key/.pub files exist). */
     private static final Object sKeyLock = new Object();
 
     private static Dadb connect(Context context) throws Exception {
@@ -504,15 +504,15 @@ public class AdbLocalClient {
 
     // ── Grant SYSTEM_ALERT_WINDOW via appops ─────────────────────────────────────
     /**
-     * Accorde l'AppOp SYSTEM_ALERT_WINDOW au package courant via le shell ADB local.
+     * Grants SYSTEM_ALERT_WINDOW to the current package via the local ADB shell.
      *
-     * Sur Android 10+ une app non-system ne bénéficie pas de cet AppOp même si
-     * SYSTEM_ALERT_WINDOW est dans le manifest et l'APK est signé platform.
-     * La commande "appops set <pkg> SYSTEM_ALERT_WINDOW allow" (uid shell = 2000)
-     * est suffisante pour que Settings.canDrawOverlays() renvoie true sans redémarrage.
+     * On Android 10+ a non-system app does not get this AppOp even if
+     * SYSTEM_ALERT_WINDOW is in the manifest and the APK is platform-signed.
+     * The command "appops set <pkg> SYSTEM_ALERT_WINDOW allow" (shell uid=2000)
+     * is sufficient for Settings.canDrawOverlays() to return true without a reboot.
      *
-     * Callback appelé sur le thread background dadb — penser à poster sur le main thread
-     * si on veut modifier l'UI suite au succès.
+     * Callback is called on the dadb background thread — post to main thread
+     * if you need to update the UI after success.
      */
     public static void grantOverlayPermission(final Context context, final Callback callback) {
         sExecutor.execute(new Runnable() {
@@ -534,69 +534,69 @@ public class AdbLocalClient {
         }); // adb-overlay-grant
     }
 
-    // ── Freedom : démarrage automatique ─────────────────────────────────────
+    // ── Freedom: automatic startup ────────────────────────────────────────────
     /**
-     * Configure Freedom (com.xdja.clusterdemo) en mode "全屏导航" (plein écran), puis le
-     * démarre via ADB shell.
+     * Configures Freedom (com.xdja.clusterdemo) in "全屏导航" (full-screen) mode,
+     * then starts it via ADB shell.
      *
-     * Mécanisme : Freedom persiste son mode navigation dans
+     * Mechanism: Freedom persists its navigation mode in
      *   /sdcard/Android/data/com.xdja.clusterdemo/data/properties.xml
-     * sous la clé "navigationType" (int) — HashMap Java sérialisé (ObjectOutputStream).
-     * Valeur 1 = 全屏导航 (projection plein écran, confirmé voiture v2.29).
-     * Sans fichier (défaut) = navigationType absent → BootReceiver retourne sans créer de VirtualDisplay.
+     * under the key "navigationType" (int) — Java-serialized HashMap (ObjectOutputStream).
+     * Value 1 = 全屏导航 (full-screen projection, confirmed in car v2.29).
+     * Without file (default) = navigationType absent → BootReceiver returns without creating VirtualDisplay.
      *
-     * Séquence :
-     *   1. force-stop Freedom (nettoyage avant redémarrage propre)
-     *   2. écrire properties.xml avec navigationType=1 (全屏导航)
-     *   3. am broadcast BOOT_COMPLETED → BootReceiver lit le fichier et crée le VirtualDisplay
+     * Sequence:
+     *   1. force-stop Freedom (clean state before restart)
+     *   2. write properties.xml with navigationType=1 (全屏导航)
+     *   3. am broadcast BOOT_COMPLETED → BootReceiver reads the file and creates the VirtualDisplay
      *
-     * La callback est appelée sur un thread ADB (background).
+     * Callback is called on an ADB background thread.
      */
     public static void startFreedom(final Context context, final Callback callback) {
         startFreedom(context, false, callback);
     }
 
     /**
-     * @param skipDisplayCheck  true si l'appelant sait déjà que le VirtualDisplay fission est absent
-     *                          (ex: juste après checkFreedomState → INACTIVE). Évite une 2e connexion
-     *                          ADB redondante pour vérifier la même chose.
+     * @param skipDisplayCheck  true if the caller already knows the fission VirtualDisplay is absent
+     *                          (e.g. just after checkFreedomState → INACTIVE). Avoids a redundant
+     *                          second ADB round-trip to check the same thing.
      */
     public static void startFreedom(final Context context, final boolean skipDisplayCheck,
             final Callback callback) {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 try (Dadb dadb = connect(context)) {
-                    // 1. Vérifier si Freedom tourne déjà en mémoire.
-                    //    Sauté si skipDisplayCheck=true (l'appelant a déjà confirmé son absence).
+                    // 1. Check if Freedom is already running in memory.
+                    //    Skipped if skipDisplayCheck=true (caller already confirmed it's absent).
                     if (!skipDisplayCheck) {
                         String pidCheck = safeOut(dadb.shell(
                                 "ps -A | grep com.xdja.clusterdemo 2>&1").getAllOutput()).trim();
                         if (!pidCheck.isEmpty()) {
-                            AppLogger.i(TAG, "startFreedom : Freedom (com.xdja.clusterdemo) déjà actif → pas de redémarrage");
-                            callback.onSuccess("Freedom déjà actif");
+                            AppLogger.i(TAG, "startFreedom: Freedom (com.xdja.clusterdemo) already active → not restarting");
+                            callback.onSuccess("Freedom already active");
                             return;
                         }
                     } else {
-                        AppLogger.d(TAG, "startFreedom : skip pidCheck (Freedom déjà confirmé inactif)");
+                        AppLogger.d(TAG, "startFreedom: skip pidCheck (Freedom already confirmed inactive)");
                     }
 
-                    // 2. Freedom inactif → force-stop de sécurité avant le démarrage propre
+                    // 2. Freedom inactive → safety force-stop before clean startup
                     dadb.shell("am force-stop com.xdja.clusterdemo 2>&1");
-                    AppLogger.i(TAG, "startFreedom : force-stop Freedom");
+                    AppLogger.i(TAG, "startFreedom: force-stop Freedom");
                     Thread.sleep(500);
 
-                    // 3. Écrire properties.xml avec navigationType=1 (全屏导航)
-                    //    IMPORTANT : ne PAS supprimer le fichier — navigationType=0 (défaut sans fichier)
-                    //    déclenche le retour immédiat dans BootReceiver.setup() sans créer le VirtualDisplay.
-                    //    Le fichier est un HashMap Java sérialisé (ObjectOutputStream).
+                    // 3. Write properties.xml with navigationType=1 (全屏导航)
+                    //    IMPORTANT: do NOT delete the file — navigationType=0 (default without file)
+                    //    triggers immediate return in BootReceiver.setup() without creating the VirtualDisplay.
+                    //    The file is a Java-serialized HashMap (ObjectOutputStream).
                     writeNavigationTypeFile(dadb);
-                    AppLogger.i(TAG, "startFreedom : properties.xml écrit (navigationType=1 → 全屏导航)");
+                    AppLogger.i(TAG, "startFreedom: properties.xml written (navigationType=1 → 全屏导航)");
 
-                    // 4. Démarrer Freedom de manière 100% transparente
-                    //    Au lieu d'ouvrir MainActivity et causer un "flash" visuel à l'écran,
-                    //    on simule le BOOT_COMPLETED. Freedom n'a besoin que de lancer son BootReceiver
-                    //    pour lire notre fichier et établir le pont Binder.
-                    AppLogger.i(TAG, "startFreedom : démarrage transparent via am broadcast BOOT_COMPLETED");
+                    // 4. Start Freedom fully transparently.
+                    //    Instead of opening MainActivity (which causes a visual flash on screen),
+                    //    we simulate BOOT_COMPLETED. Freedom only needs to run its BootReceiver
+                    //    to read our file and establish the Binder bridge.
+                    AppLogger.i(TAG, "startFreedom: transparent startup via am broadcast BOOT_COMPLETED");
                     String startOut = safeOut(dadb.shell(
                             "am broadcast -a android.intent.action.BOOT_COMPLETED -n com.xdja.clusterdemo/com.byd.windowmanager.receivers.BootReceiver 2>&1"
                     ).getAllOutput()).trim();
@@ -612,16 +612,15 @@ public class AdbLocalClient {
     }
 
     /**
-     * Écrit /sdcard/Android/data/com.xdja.clusterdemo/data/properties.xml
-     * avec navigationType=1 (全屏导航 — projection plein écran).
+     * Writes /sdcard/Android/data/com.xdja.clusterdemo/data/properties.xml
+     * with navigationType=1 (全屏导航 — full-screen projection).
      *
-     * Freedom lit ce fichier via ObjectInputStream → HashMap<String, Object>.
-     * BootReceiver.setup() vérifie navigationType > 0 pour déclencher la création
-     * du VirtualDisplay. Avec la valeur par défaut 0 (fichier absent), setup() retourne
-     * immédiatement sans rien faire.
+     * Freedom reads this file via ObjectInputStream → HashMap<String, Object>.
+     * BootReceiver.setup() checks navigationType > 0 to trigger VirtualDisplay creation.
+     * With the default value 0 (file absent), setup() returns immediately without action.
      */
     private static void writeNavigationTypeFile(Dadb dadb) throws Exception {
-        // Sérialiser HashMap {"navigationType": Integer(1)} avec Java ObjectOutputStream
+        // Serialize HashMap {"navigationType": Integer(1)} with Java ObjectOutputStream
         HashMap<String, Object> prefs = new HashMap<>();
         prefs.put("navigationType", Integer.valueOf(1));
 
@@ -631,7 +630,7 @@ public class AdbLocalClient {
         oos.close();
         byte[] bytes = baos.toByteArray();
 
-        // Encoder en Base64 et écrire via shell ADB (base64 disponible dans Android toybox)
+        // Base64-encode and write via ADB shell (base64 available in Android toybox)
         String b64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
         String dir  = "/sdcard/Android/data/com.xdja.clusterdemo/data";
         String path = dir + "/properties.xml";
@@ -645,15 +644,15 @@ public class AdbLocalClient {
 
     // ── TEST 4 : Broadcast BOOT_COMPLETED vers le BootReceiver de Freedom ──────
     /**
-     * Envoie BOOT_COMPLETED directement au BootReceiver de Freedom sans ouvrir son UI.
+     * Sends BOOT_COMPLETED directly to Freedom's BootReceiver without opening its UI.
      *
-     * Séquence :
+     * Sequence:
      *   1. am broadcast BOOT_COMPLETED → com.xdja.clusterdemo/.BootReceiver
-     *   2. Attendre 5s pour laisser le temps au VirtualDisplay d'apparaître
-     *   3. dumpsys display | grep fission → vérifie si le VirtualDisplay cluster est créé
+     *   2. Wait 5s for the VirtualDisplay to appear
+     *   3. dumpsys display | grep fission → verify if cluster VirtualDisplay was created
      *
-     * Si le VirtualDisplay est créé → startFreedom() peut être remplacé par ce broadcast
-     * (headless, pas d'UI Freedom visible).
+     * If VirtualDisplay is created → startFreedom() can be replaced by this broadcast
+     * (headless, no Freedom UI visible).
      */
     public static void sendBootReceiverBroadcast(final Context context, final Callback callback) {
         sExecutor.execute(new Runnable() {
@@ -670,13 +669,13 @@ public class AdbLocalClient {
                     sb.append(before.isEmpty() ? "(aucun display fission)" : before).append("\n\n");
                     AppLogger.i(TAG, "TEST4 avant : " + (before.isEmpty() ? "vide" : before));
 
-                    // Force-stop Freedom au préalable pour repartir d'un état propre
+                    // Force-stop Freedom first for a clean state
                     sb.append("── Force-stop Freedom ──\n");
                     dadb.shell("am force-stop com.xdja.clusterdemo 2>&1");
                     Thread.sleep(500);
                     sb.append("OK\n\n");
 
-                    // Broadcast BOOT_COMPLETED ciblé
+                    // Targeted BOOT_COMPLETED broadcast
                     sb.append("── am broadcast BOOT_COMPLETED → BootReceiver ──\n");
                     String broadcastOut = safeOut(dadb.shell(
                             "am broadcast -a android.intent.action.BOOT_COMPLETED" +
@@ -685,22 +684,22 @@ public class AdbLocalClient {
                     sb.append(broadcastOut).append("\n\n");
                     AppLogger.i(TAG, "TEST4 broadcast → " + broadcastOut);
 
-                    // Attendre 5s pour que le VirtualDisplay soit créé
-                    sb.append("── Attente 5s (création VirtualDisplay) ──\n");
+                    // Wait 5s for VirtualDisplay creation
+                    sb.append("── Waiting 5s (VirtualDisplay creation) ──\n");
                     Thread.sleep(5000);
 
-                    // Snapshot APRÈS
-                    sb.append("── APRÈS broadcast ──\n");
+                    // Snapshot AFTER
+                    sb.append("── AFTER broadcast ──\n");
                     String after = safeOut(dadb.shell(
                             "dumpsys display 2>&1 | grep -i fission"
                     ).getAllOutput()).trim();
                     sb.append(after.isEmpty() ? "(aucun display fission)" : after).append("\n\n");
-                    AppLogger.i(TAG, "TEST4 après : " + (after.isEmpty() ? "vide" : after));
+                    AppLogger.i(TAG, "TEST4 after: " + (after.isEmpty() ? "empty" : after));
 
                     // Conclusion
                     boolean created = !after.isEmpty() && after.contains("fission");
                     sb.append(created
-                            ? "✅ VirtualDisplay créé ! Broadcast seul suffit → Freedom headless possible."
+                            ? "✅ VirtualDisplay created! Broadcast alone is sufficient → Freedom headless possible."
                             : "❌ VirtualDisplay absent. Le BootReceiver seul ne suffit pas.");
                     long ms = System.currentTimeMillis() - t0;
                     sb.append("\n\n(").append(ms).append(" ms)");
@@ -717,18 +716,18 @@ public class AdbLocalClient {
 
 
     /**
-     * Active le cluster en mode présentation (sendInfo 30 + 16 uniquement).
+     * Activates the cluster in presentation mode (sendInfo 30 + 16 only).
      *
-     *   1. sendInfo(1000, 30) — taille 12.3" TOUJOURS : seul mode où l'écran ADAS n'est pas étiré
-     *   2. sendInfo(1000, 16) — Qt standby → libère le display pour la projection
+     *   1. sendInfo(1000, 30) — 12.3" size ALWAYS: only mode where ADAS screen is not stretched
+     *   2. sendInfo(1000, 16) — Qt standby → releases display for projection
      *
-     * Ne contient PAS sendInfo(18) ni sendInfo(0) qui sont des commandes de restauration.
+     * Does NOT include sendInfo(18) or sendInfo(0) which are restore commands.
      */
     public static void activateClusterDisplay(final Context context, final Callback callback) {
         checkFreedomState(context, new FreedomStateCallback() {
             @Override public void onResult(FreedomStatus status) {
                 if (status == FreedomStatus.INACTIVE) {
-                    AppLogger.i(TAG, "activateClusterDisplay : Freedom inactif → démarrage d'abord");
+                    AppLogger.i(TAG, "activateClusterDisplay: Freedom inactive → starting first");
                     startFreedom(context, true, new Callback() {
                         @Override public void onSuccess(String ignored) {
                             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
@@ -753,7 +752,7 @@ public class AdbLocalClient {
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
 
-                    sb.append("── sendInfo(1000, 30) = 12.3\" (ADAS non étiré) ──\n");
+                    sb.append("── sendInfo(1000, 30) = 12.3\" (ADAS not stretched) ──\n");
                     AdbShellResponse r30 = dadb.shell(
                         "service call AutoContainer 2 i32 1000 i32 30 s16 \"\" 2>&1");
                     sb.append(r30.getAllOutput().trim()).append("\n");
@@ -764,7 +763,7 @@ public class AdbLocalClient {
                         "service call AutoContainer 2 i32 1000 i32 16 s16 \"\" 2>&1");
                     sb.append(r16.getAllOutput().trim()).append("\n");
 
-                    AppLogger.endTiming(TAG, t0, "activateClusterDisplay terminé");
+                    AppLogger.endTiming(TAG, t0, "activateClusterDisplay finished");
                     callback.onSuccess(sb.toString());
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -777,23 +776,23 @@ public class AdbLocalClient {
     }
 
     /**
-     * TEST 10 — Séquence activation + restauration cluster (Seal EU)
+     * TEST 10 — Cluster activation + restore sequence (Seal EU)
      *
-     * Séquence :
-     *   1. sendInfo(1000, 30) — Seal EU screen size (CONFIRMÉ 16/04/2026)
-     *   2. attente 1s
+     * Sequence:
+     *   1. sendInfo(1000, 30) — Seal EU screen size (CONFIRMED 16/04/2026)
+     *   2. wait 1s
      *   3. sendInfo(1000, 16) — Qt standby
-     *   4. attente 2s
-     *   5. sendInfo(1000, 18) — fermer projection (投屏关闭)
-     *   6. attente 1s
-     *   7. sendInfo(1000,  0) — rafraîchir flux Qt
+     *   4. wait 2s
+     *   5. sendInfo(1000, 18) — close projection (投屏关闭)
+     *   6. wait 1s
+     *   7. sendInfo(1000,  0) — refresh Qt stream
      *   8. Logcat AutoContainer
      */
     public static void runDisplayOneLaunch(final Context context, final Callback callback) {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 long t0 = AppLogger.startTiming();
-                AppLogger.i(TAG, "runDisplayOneLaunch démarré [" + Thread.currentThread().getName() + "]");
+                AppLogger.i(TAG, "runDisplayOneLaunch started [" + Thread.currentThread().getName() + "]");
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
                     dadb.shell("logcat -c 2>&1");
@@ -819,8 +818,8 @@ public class AdbLocalClient {
                     sb.append(rSend18.getAllOutput().trim()).append("\n");
                     Thread.sleep(1000);
 
-                    // ── 4. sendInfo(0) — rafraîchir flux Qt ──────────────────
-                    sb.append("\n── sendInfo(1000, 0) = rafraîchir flux Qt ──\n");
+                    // ── 4. sendInfo(0) — refresh Qt stream ───────────────────
+                    sb.append("\n── sendInfo(1000, 0) = refresh Qt stream ──\n");
                     AdbShellResponse rSend0 = dadb.shell(
                         "service call AutoContainer 2 i32 1000 i32 0 s16 \"\" 2>&1");
                     sb.append(rSend0.getAllOutput().trim()).append("\n");
@@ -830,9 +829,9 @@ public class AdbLocalClient {
                     sb.append("\n── Logcat (AutoContainer) ──\n");
                     AdbShellResponse rLog = dadb.shell(
                         "logcat -d 2>&1 | grep -iE 'AutoContainer|sendInfo' | tail -20");
-                    sb.append(rLog.getAllOutput().trim().isEmpty() ? "(aucune entrée)" : rLog.getAllOutput().trim()).append("\n");
+                    sb.append(rLog.getAllOutput().trim().isEmpty() ? "(no entries)" : rLog.getAllOutput().trim()).append("\n");
 
-                    AppLogger.endTiming(TAG, t0, "runDisplayOneLaunch terminé");
+                    AppLogger.endTiming(TAG, t0, "runDisplayOneLaunch finished");
                     callback.onSuccess(sb.toString());
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
@@ -846,33 +845,33 @@ public class AdbLocalClient {
 
 
     /**
-     * Restaure l'affichage BYD natif sur le cluster.
+     * Restores the native BYD display on the cluster.
      *
-     * com.byd.automap N'EST PAS INSTALLÉ sur la BYD Seal EU — on ne peut pas utiliser
-     * la séquence Freedom (am start automap).
+     * com.byd.automap is NOT installed on BYD Seal EU — cannot use
+     * Freedom sequence (am start automap).
      *
-     * FIX Seal EU :
-     *   1. Trouver le taskId de notre app sur display <displayId>
-     *   2. am task remove <taskId>  → libère la surface (sans tuer le processus entier)
-     *   3. sendInfo(1000, 0)        → Qt reprend le contrôle de la surface
+     * Seal EU fix:
+     *   1. Find taskId of our app on display <displayId>
+     *   2. am task remove <taskId>  → releases the surface (without killing the whole process)
+     *   3. sendInfo(1000, 0)        → Qt regains control of the surface
      *
-     * @param displayId  ID du display cluster (1 sur DiLink 3.0)
+     * @param displayId  cluster display ID (1 on DiLink 3.0)
      */
     public static void restoreBydOnCluster(final Context context,
-            final String targetPackage, // nullable : package à force-stoper avant la restauration
+            final String targetPackage, // nullable: package to force-stop before restore
             final Callback callback) {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
-                AppLogger.log(TAG, "Restauration BYD cluster"
-                        + (targetPackage != null ? " (cible=" + targetPackage + ")" : ""));
+                AppLogger.log(TAG, "Restoring BYD cluster"
+                        + (targetPackage != null ? " (target=" + targetPackage + ")" : ""));
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
 
-                    // 0. Force-stop du package cible AVANT sendInfo(18).
-                    // Sans ça, la task de l'app (lancée via trampoline sur display 1) reste
-                    // enregistrée dans ActivityManager : quand sendInfo(18) libère la surface
-                    // Qt, Android relocalise la task orpheline sur display 0 → l'app apparaît
-                    // sur l'écran principal du tablet.
+                    // 0. Force-stop target package BEFORE sendInfo(18).
+                    // Without this, the app task (launched via trampoline on display 1) remains
+                    // registered in ActivityManager: when sendInfo(18) releases the Qt surface,
+                    // Android relocates the orphan task to display 0 → the app appears
+                    // on the tablet's main screen.
                     if (targetPackage != null && !targetPackage.isEmpty()) {
                         dadb.shell("am force-stop " + targetPackage + " 2>&1");
                         sb.append("force-stop ").append(targetPackage).append("\n");
@@ -880,9 +879,9 @@ public class AdbLocalClient {
                     }
 
                     // 1. Force-stop Freedom (com.xdja.clusterdemo).
-                    //    Freedom est démarré automatiquement au lancement de notre app (v1.86).
-                    //    S'il tourne encore, il re-prend le display immédiatement après sendInfo(18)
-                    //    et annule la restauration. On doit l'arrêter d'abord.
+                    //    Freedom is started automatically at our app launch (v1.86).
+                    //    If still running, it reclaims display immediately after sendInfo(18)
+                    //    and cancels the restore. Must stop it first.
                     dadb.shell("am force-stop com.xdja.clusterdemo 2>&1");
                     sb.append("force-stop Freedom\n");
                     Thread.sleep(500);
@@ -897,11 +896,11 @@ public class AdbLocalClient {
                     sb.append("sendInfo(0)  : ").append(rRestore.getAllOutput().trim()).append("\n");
 
                     AppLogger.log(TAG, "restoreBydOnCluster -> OK");
-                    callback.onSuccess("BYD restauré \u2713\n" + sb);
+                    callback.onSuccess("BYD restored \u2713\n" + sb);
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                     String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-                    AppLogger.e(TAG, "restoreBydOnCluster ERREUR", e);
+                    AppLogger.e(TAG, "restoreBydOnCluster ERROR", e);
                     callback.onError(msg);
                 }
             }
@@ -909,27 +908,27 @@ public class AdbLocalClient {
     }
 
     /**
-     * Cluster d'origine — remet le cluster Qt dans la taille d'écran configurée par l'utilisateur.
+     * Origin cluster — restores the Qt cluster to the screen size configured by the user.
      *
-     * Séquence :
-     *   1. sendInfo(1000, screenSizeCmd) — passer Qt dans la bonne résolution
-     *   2. sendInfo(1000, 18)            — fermer la projection (投屏关闭)
-     *   3. sendInfo(1000,  0)            — rafraîchir le flux Qt
+     * Sequence:
+     *   1. sendInfo(1000, screenSizeCmd) — switch Qt to the correct resolution
+     *   2. sendInfo(1000, 18)            — close projection (投屏关闭)
+     *   3. sendInfo(1000,  0)            — refresh Qt stream
      *
-     * @param screenSizeCmd  code taille : 29=8.8", 30=12.3" (Seal EU), 31=10.25"
+     * @param screenSizeCmd  size code: 29=8.8" (Atto 3), 30=12.3" (Seal U-DMI), 31=10.25" (Seal EU)
      */
     public static void restoreOriginCluster(final Context context, final int screenSizeCmd,
-            final String targetPackage, // nullable : package à force-stoper avant la restauration
+            final String targetPackage, // nullable: package to force-stop before restore
             final Callback callback) {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 AppLogger.log(TAG, "restoreOriginCluster screenSize=" + screenSizeCmd
-                        + (targetPackage != null ? " cible=" + targetPackage : ""));
+                        + (targetPackage != null ? " target=" + targetPackage : ""));
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
 
-                    // Force-stop du package cible avant la restauration (même raison que
-                    // restoreBydOnCluster : éviter la relocalisation de la task sur display 0).
+                    // Force-stop target package before restore (same reason as
+                    // restoreBydOnCluster: avoid task relocation to display 0).
                     if (targetPackage != null && !targetPackage.isEmpty()) {
                         dadb.shell("am force-stop " + targetPackage + " 2>&1");
                         sb.append("force-stop ").append(targetPackage).append("\n");
@@ -950,11 +949,11 @@ public class AdbLocalClient {
                     sb.append("sendInfo(0)  : ").append(rRefresh.getAllOutput().trim()).append("\n");
 
                     AppLogger.log(TAG, "restoreOriginCluster -> OK");
-                    callback.onSuccess("Cluster d'origine restauré \u2713\n" + sb);
+                    callback.onSuccess("Origin cluster restored \u2713\n" + sb);
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                     String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-                    AppLogger.e(TAG, "restoreOriginCluster ERREUR", e);
+                    AppLogger.e(TAG, "restoreOriginCluster ERROR", e);
                     callback.onError(msg);
                 }
             }
@@ -962,18 +961,18 @@ public class AdbLocalClient {
     }
 
     // ──────────────────────────────────────────────────────────────────────────────────────────────
-    // sendInfo ADB relay — contourne la SecurityException (uid=10100 non listé dans whitelist JSON)
-    // dm-verity empêche de patcher /system/etc/container_comm_cfg.json sur ce hardware.
-    // uid=2000 (shell ADB) passe le checkSignatures() dans AutoContainerService.
+    // sendInfo ADB relay — bypasses SecurityException (uid=10100 not in whitelist JSON)
+    // dm-verity prevents patching /system/etc/container_comm_cfg.json on this hardware.
+    // uid=2000 (shell ADB) passes checkSignatures() in AutoContainerService.
     // ──────────────────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Envoie sendInfo(type, infoInt, infoStr) au service AutoContainer via ADB shell relay.
+     * Sends sendInfo(type, infoInt, infoStr) to the AutoContainer service via ADB shell relay.
      *
-     * Équivalent de : service call AutoContainer 2 i32 <type> i32 <infoInt> s16 "<infoStr>"
-     * uid=2000 (shell) passe le checkSignatures → pas de SecurityException.
+     * Equivalent to: service call AutoContainer 2 i32 <type> i32 <infoInt> s16 "<infoStr>"
+     * uid=2000 (shell) passes checkSignatures → no SecurityException.
      *
-     * La callback est appelée depuis un thread background — utiliser runOnUiThread si nécessaire.
+     * Callback is called from a background thread — use runOnUiThread if necessary.
      */
     public static void sendInfo(final Context context,
                                 final int type, final int infoInt, final String infoStr,
@@ -998,20 +997,20 @@ public class AdbLocalClient {
         }); // adb-sendinfo-thread
     }
 
-    // ── Diagnostic : signature + permissions effectivement accordées ──────────
+    // ── Diagnostic: actual signature + permissions ──────────────────────────────
 
     /**
-     * Dump l'état réel des signatures et permissions pour notre app via ADB
-     * (uid=2000, vue système). Permet de répondre à la question :
-     * "L'APK est-il vraiment signé avec la même clé que la ROM ?"
+     * Dumps the real signature and permission state for our app via ADB
+     * (uid=2000, system view). Answers the question:
+     * "Is the APK really signed with the same key as the ROM?"
      *
-     * Sortie loggée (AppLogger INFO, tag "SigDump") :
+     * Output logged (AppLogger INFO, tag "SigDump"):
      *   - ro.build.tags / ro.build.version.security_patch
      *   - dumpsys package com.byd.myapp | grep -E "Signature|signatures|version"
      *   - dumpsys package com.xdja.containerservice | grep -E "Signature|signatures"
      *   - pm dump com.byd.myapp | grep -E "INTERNAL_SYSTEM_WINDOW|MANAGE_ACTIVITY_STACKS|INJECT_EVENTS"
      *   - dumpsys package com.byd.myapp | grep -A 1 "install permissions:"
-     *   - id (uid courant du shell)
+     *   - id (current shell uid)
      */
     public static void dumpSignatureAndPermissions(final Context context) {
         sExecutor.execute(new Runnable() {
@@ -1040,7 +1039,7 @@ public class AdbLocalClient {
                             + "| grep -E 'signatures|sharedUser' | head -5 2>&1").getAllOutput().trim();
                     for (String line : romSig.split("\n")) AppLogger.i(dTag, "  " + line);
 
-                    AppLogger.i(dTag, "=== Permissions accordées à notre app ===");
+                    AppLogger.i(dTag, "=== Permissions granted to our app ===");
                     String perms = dadb.shell(
                             "dumpsys package " + pkg
                             + " | grep -E "
@@ -1067,32 +1066,32 @@ public class AdbLocalClient {
         }); // adb-sigdump-thread
     }
 
-    // ── DIAG v1.74 : SUPPRIMÉ (v1.75.1) ──
-    // La méthode dumpClusterRoutingState() effectuait un brute-force sendInfo(1000, N)
-    // pour identifier le routing display Freedom. Inutile désormais : la vraie cause
-    // (OWN_CONTENT_ONLY sur le VirtualDisplay créé par AutoDisplayService) est
-    // identifiée et corrigée par v1.75 (ClusterSurfaceProbe).
-    // Suppression demandée par l'utilisateur pour éviter tout impact sur la voiture.
+    // ── DIAG v1.74: REMOVED (v1.75.1) ──
+    // dumpClusterRoutingState() performed a brute-force sendInfo(1000, N)
+    // to identify the Freedom display routing. No longer needed: the real cause
+    // (OWN_CONTENT_ONLY on the VirtualDisplay created by AutoDisplayService) is
+    // identified and fixed by v1.75 (ClusterSurfaceProbe).
+    // Removed to avoid any impact on the vehicle.
 
     // ── TEST 12 : Sonde taille display cluster + essais cmd 29/30/31 + wm size ──
 
     /**
-     * Teste les différentes approches pour corriger la résolution du display cluster.
+     * Tests different approaches to fix the cluster display resolution.
      *
-     * Le VirtualDisplay d'AutoDisplayService est créé en 1920×1080 (valeurs par défaut
-     * dans le code décompilé de com.xdja.containerservice), mais le panel physique est
-     * ~1920×480 (ratio ~4:1). Résultat : étirement vertical.
+     * The AutoDisplayService VirtualDisplay is created in 1920×1080 (default values
+     * in decompiled com.xdja.containerservice code), but the physical panel is
+     * ~1920×480 (ratio ~4:1). Result: vertical stretching.
      *
-     * Ce test essaie séquentiellement :
-     *   1. Dump l'état actuel du display 1 (wm size, dumpsys display)
-     *   2. sendInfo(1000, 29) — 切换到8.8寸屏 (pourrait changer la surface Qt)
-     *   3. Re-dump le display 1 pour voir si les dimensions ont changé
-     *   4. sendInfo(1000, 30) — 切换到12.3寸屏 (rétablit la config d'origine)
-     *   5. Essai wm size 1920x480 -d 1 (forcer la résolution logique)
-     *   6. Dump post-wm size
-     *   7. wm size reset -d 1 (nettoyer)
+     * This test tries sequentially:
+     *   1. Dump current state of display 1 (wm size, dumpsys display)
+     *   2. sendInfo(1000, 29) — 切换到8.8寸屏 (might change Qt surface)
+     *   3. Re-dump display 1 to see if dimensions changed
+     *   4. sendInfo(1000, 30) — 切换到12.3寸屏 (restore original config)
+     *   5. Try wm size 1920x480 -d 1 (force logical resolution)
+     *   6. Post-wm size dump
+     *   7. wm size reset -d 1 (cleanup)
      *
-     * Le résultat est un rapport texte avec les dumps avant/après chaque commande.
+     * Result is a text report with before/after dumps for each command
      */
     public static void runClusterDisplaySizeTest(final Context context, final Callback callback) {
         sExecutor.execute(new Runnable() {
@@ -1100,8 +1099,8 @@ public class AdbLocalClient {
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
 
-                    // ── 1. État initial ──────────────────────────────────────
-                    sb.append("=== [1] ÉTAT INITIAL DU DISPLAY CLUSTER ===\n");
+                    // ── 1. Initial state ─────────────────────────────────────
+                    sb.append("=== [1] INITIAL CLUSTER DISPLAY STATE ===\n");
 
                     AdbShellResponse rSize = dadb.shell("wm size -d 1 2>&1");
                     sb.append("wm size -d 1 : ").append(rSize.getAllOutput().trim()).append("\n");
@@ -1112,8 +1111,8 @@ public class AdbLocalClient {
                     AdbShellResponse rDump = dadb.shell(
                             "dumpsys display 2>/dev/null | grep -A5 'mDisplayId=1' | head -10");
                     String dumpOut = rDump.getAllOutput().trim();
-                    sb.append("dumpsys display id=1 :\n").append(
-                            dumpOut.isEmpty() ? "  (non trouvé dans dumpsys)" : dumpOut).append("\n");
+                    sb.append("dumpsys display id=1:\n").append(
+                            dumpOut.isEmpty() ? "  (not found in dumpsys)" : dumpOut).append("\n");
 
                     // Surface info via SurfaceFlinger
                     AdbShellResponse rSf = dadb.shell(
@@ -1124,79 +1123,79 @@ public class AdbLocalClient {
                     }
                     sb.append("\n");
 
-                    // ── 2. sendInfo(1000, 29) — switch 8.8 pouces ────────────
+                    // ── 2. sendInfo(1000, 29) — switch 8.8" ──────────────────
                     sb.append("=== [2] sendInfo(1000, 29) — 切换到8.8寸屏 ===\n");
                     AdbShellResponse r29 = dadb.shell(
                             "service call AutoContainer 2 i32 1000 i32 29 s16 \"\" 2>&1");
-                    sb.append("Résultat : ").append(r29.getAllOutput().trim()).append("\n");
+                    sb.append("Result: ").append(r29.getAllOutput().trim()).append("\n");
 
-                    // Attendre que Qt applique le changement
+                    // Wait for Qt to apply the change
                     Thread.sleep(1500);
 
                     AdbShellResponse rPost29 = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 après cmd=29 : ").append(rPost29.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 after cmd=29: ").append(rPost29.getAllOutput().trim()).append("\n");
 
                     AdbShellResponse rDump29 = dadb.shell(
                             "dumpsys display 2>/dev/null | grep -A5 'mDisplayId=1' | head -10");
                     String dump29 = rDump29.getAllOutput().trim();
-                    sb.append("dumpsys display id=1 après cmd=29 :\n").append(
-                            dump29.isEmpty() ? "  (non trouvé)" : dump29).append("\n\n");
+                    sb.append("dumpsys display id=1 after cmd=29:\n").append(
+                            dump29.isEmpty() ? "  (not found)" : dump29).append("\n\n");
 
-                    // ── 3. sendInfo(1000, 30) — Seal EU mode (12.3", mode par défaut Seal EU) ─
-                    sb.append("=== [3] sendInfo(1000, 30) — Seal EU (12.3\") — CONFIRMÉ 16/04/2026 ===\n");
+                    // ── 3. sendInfo(1000, 30) — Seal EU mode (12.3") ─────────
+                    sb.append("=== [3] sendInfo(1000, 30) — Seal EU (12.3\") — CONFIRMED 16/04/2026 ===\n");
                     AdbShellResponse r30 = dadb.shell(
                             "service call AutoContainer 2 i32 1000 i32 30 s16 \"\" 2>&1");
-                    sb.append("Résultat : ").append(r30.getAllOutput().trim()).append("\n");
+                    sb.append("Result: ").append(r30.getAllOutput().trim()).append("\n");
                     Thread.sleep(1500);
 
                     AdbShellResponse rPost30 = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 après cmd=30 : ").append(rPost30.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 after cmd=30: ").append(rPost30.getAllOutput().trim()).append("\n");
                     sb.append("\n");
 
-                    // ── 4. sendInfo(1000, 31) — switch 10.25 pouces ───────────
+                    // ── 4. sendInfo(1000, 31) — switch 10.25" ────────────────
                     sb.append("=== [4] sendInfo(1000, 31) — 切换到10.25寸屏 ===\n");
                     AdbShellResponse r31 = dadb.shell(
                             "service call AutoContainer 2 i32 1000 i32 31 s16 \"\" 2>&1");
-                    sb.append("Résultat : ").append(r31.getAllOutput().trim()).append("\n");
+                    sb.append("Result: ").append(r31.getAllOutput().trim()).append("\n");
                     Thread.sleep(1500);
 
                     AdbShellResponse rPost31 = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 après cmd=31 : ").append(rPost31.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 after cmd=31: ").append(rPost31.getAllOutput().trim()).append("\n");
                     sb.append("\n");
 
-                    // Rétablir 12.3"
+                    // Restore 12.3"
                     dadb.shell("service call AutoContainer 2 i32 1000 i32 30 s16 \"\" 2>&1");
                     Thread.sleep(500);
 
-                    // ── 5. wm size 1920x480 -d 1 (forcer la résolution) ───────
+                    // ── 5. wm size 1920x480 -d 1 ─────────────────────────────
                     sb.append("=== [5] wm size 1920x480 -d 1 ===\n");
                     AdbShellResponse rWm = dadb.shell("wm size 1920x480 -d 1 2>&1");
-                    sb.append("Résultat cmd : ").append(rWm.getAllOutput().trim()).append("\n");
+                    sb.append("Command result: ").append(rWm.getAllOutput().trim()).append("\n");
                     Thread.sleep(500);
 
                     AdbShellResponse rPostWm = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 après : ").append(rPostWm.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 after: ").append(rPostWm.getAllOutput().trim()).append("\n");
 
                     AdbShellResponse rDumpWm = dadb.shell(
                             "dumpsys display 2>/dev/null | grep -A5 'mDisplayId=1' | head -10");
                     String dumpWm = rDumpWm.getAllOutput().trim();
-                    sb.append("dumpsys display id=1 après :\n").append(
-                            dumpWm.isEmpty() ? "  (non trouvé)" : dumpWm).append("\n\n");
+                    sb.append("dumpsys display id=1 after:\n").append(
+                            dumpWm.isEmpty() ? "  (not found)" : dumpWm).append("\n\n");
 
                     // ── 6. Reset ──────────────────────────────────────────────
-                    sb.append("=== [6] wm size reset -d 1 (nettoyage) ===\n");
+                    sb.append("=== [6] wm size reset -d 1 (cleanup) ===\n");
                     AdbShellResponse rReset = dadb.shell("wm size reset -d 1 2>&1");
-                    sb.append("Résultat : ").append(rReset.getAllOutput().trim()).append("\n");
+                    sb.append("Result: ").append(rReset.getAllOutput().trim()).append("\n");
 
                     AdbShellResponse rFinal = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 final : ").append(rFinal.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 final: ").append(rFinal.getAllOutput().trim()).append("\n");
 
-                    AppLogger.log(TAG, "TEST 12 terminé ✓");
+                    AppLogger.log(TAG, "TEST 12 finished ✓");
                     callback.onSuccess(sb.toString());
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                     String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
-                    AppLogger.e(TAG, "TEST 12 ERREUR", e);
+                    AppLogger.e(TAG, "TEST 12 ERROR", e);
                     callback.onError(msg);
                 }
             }
@@ -1204,11 +1203,11 @@ public class AdbLocalClient {
     }
 
     /**
-     * Envoie une commande de changement de taille d'écran Qt vers le cluster.
-     *   cmd 29 = 切换到8.8寸屏  (8.8 pouces)
-     *   cmd 30 = 切换到12.3寸屏 (12.3 pouces — état par défaut AutoDisplayService)
-     *   cmd 31 = 切换到10.25寸屏 (10.25 pouces)
-     * Retourne un rapport wm size -d 1 avant/après la commande.
+     * Sends a cluster screen size change command to Qt.
+     *   cmd 29 = 切换到8.8寸屏  (8.8" — BYD Atto 3)
+     *   cmd 30 = 切换到12.3寸屏 (12.3" — Seal U-DMI, use on Seal EU to fix ADAS)
+     *   cmd 31 = 切换到10.25寸屏 (10.25" — Seal EU native)
+     * Returns a wm size -d 1 report before/after the command
      */
     public static void sendClusterScreenSize(final Context context, final int sizeCmd,
             final Callback callback) {
@@ -1221,16 +1220,16 @@ public class AdbLocalClient {
                     sb.append("sendInfo(1000, ").append(sizeCmd).append(") → ").append(label).append("\n\n");
 
                     AdbShellResponse rBefore = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("Avant  : ").append(rBefore.getAllOutput().trim()).append("\n");
+                    sb.append("Before: ").append(rBefore.getAllOutput().trim()).append("\n");
 
                     AdbShellResponse rCmd = dadb.shell(
                             "service call AutoContainer 2 i32 1000 i32 " + sizeCmd + " s16 \"\" 2>&1");
-                    sb.append("Cmd    : ").append(rCmd.getAllOutput().trim()).append("\n");
+                    sb.append("Cmd:    ").append(rCmd.getAllOutput().trim()).append("\n");
 
                     Thread.sleep(1500);
 
                     AdbShellResponse rAfter = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("Après  : ").append(rAfter.getAllOutput().trim()).append("\n");
+                    sb.append("After: ").append(rAfter.getAllOutput().trim()).append("\n");
 
                     AdbShellResponse rDump = dadb.shell(
                             "dumpsys display 2>/dev/null | grep -A5 'mDisplayId=1' | head -8");
@@ -1256,17 +1255,17 @@ public class AdbLocalClient {
     }
 
     /**
-     * Restaure la taille d'écran cluster par défaut :
-     *   1. sendInfo(1000, 30) — 切换到12.3寸屏 (état Qt par défaut, 1920×1080)
-     *   2. wm size reset -d 1 — annule tout override logique Android
-     * À utiliser après un essai de cmd 29/31 qui aurait perturbé l'affichage.
+     * Resets the cluster display size to default:
+     *   1. sendInfo(1000, 30) — 切换到12.3寸屏 (Qt default state, 1920×1080)
+     *   2. wm size reset -d 1 — cancel any Android logical override
+     * Use after testing cmd 29/31 which may have disrupted the display
      */
     public static void resetClusterDisplaySize(final Context context, final Callback callback) {
         sExecutor.execute(new Runnable() {
             @Override public void run() {
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("🔄 Restauration taille par défaut\n\n");
+                    sb.append("🔄 Restoring default size
 
                     AdbShellResponse r30 = dadb.shell(
                             "service call AutoContainer 2 i32 1000 i32 30 s16 \"\" 2>&1");
@@ -1275,11 +1274,11 @@ public class AdbLocalClient {
                     Thread.sleep(500);
 
                     AdbShellResponse rReset = dadb.shell("wm size reset -d 1 2>&1");
-                    sb.append("wm size reset -d 1 : ").append(rReset.getAllOutput().trim()).append("\n");
+                    sb.append("wm size reset -d 1: ").append(rReset.getAllOutput().trim()).append("\n");
                     Thread.sleep(300);
 
                     AdbShellResponse rFinal = dadb.shell("wm size -d 1 2>&1");
-                    sb.append("wm size -d 1 final : ").append(rFinal.getAllOutput().trim()).append("\n");
+                    sb.append("wm size -d 1 final ").append(rFinal.getAllOutput().trim()).append("\n");
 
                     AppLogger.log(TAG, "resetClusterDisplaySize ✓");
                     callback.onSuccess(sb.toString());
@@ -1293,9 +1292,9 @@ public class AdbLocalClient {
     }
 
     /**
-     * Force-stop d'une application via ADB.
-     * Appelé quand l'utilisateur tape "✕" dans la liste.
-     * Utilise "am force-stop" qui tue le processus entier + libère toutes ses surfaces.
+     * Force-stops an application via ADB.
+     * Called when the user taps "✕" in the list.
+     * Uses "am force-stop" which kills the whole process and releases allfaces.
      */
     public static void forceStopApp(final Context context, final String packageName,
             final Callback callback) {
@@ -1345,7 +1344,7 @@ public class AdbLocalClient {
                         } catch (Exception ignored) {}
                     }
                     if (li == null || li.getComponent() == null) {
-                        callback.onError("Aucune activité trouvée pour " + targetPackage);
+                        callback.onError("No activity found foargetPackage);
                         return;
                     }
                     
@@ -1360,10 +1359,10 @@ public class AdbLocalClient {
                     intent.putExtra("bounds_b", bottom);
                     context.sendBroadcast(intent);
                     
-                    callback.onSuccess("Broadcast bounds envoyé au Daemon.");
+                    callback.onSuccess("Bounds broadcast sent to Daemon.");
                 } catch (Exception e) {
                     if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-                    AppLogger.e(TAG, "launchDirectWithBounds échoué", e);
+                    AppLogger.e(TAG, "launchDirectWithBounds failed", e);
                     callback.onError(e.getClass().getSimpleName() + ": " + e.getMessage());
                 }
             }
@@ -1371,9 +1370,9 @@ public class AdbLocalClient {
     }
 
     /**
-     * Capture une frame du display cluster via screencap (uid=2000 = accès SurfaceFlinger garanti).
-     * Sauvegarde dans le cache externe de l'app ; l'app peut le lire directement (pas de permission
-     * READ_EXTERNAL_STORAGE requise pour le répertoire spécifique au package en API 29).
+     * Captures a frame of the cluster display via screencap (uid=2000 = guaranteed SurfaceFlinger access).
+     * Saves to the app's external cache dir; the app can read it directly (no
+     * READ_EXTERNAL_STORAGE required for the package-specific directory o 29).
      */
     public static void captureClusterDisplay(final Context context,
             final int displayId, final BitmapCallback callback) {
@@ -1403,8 +1402,8 @@ public class AdbLocalClient {
     }
 
     /**
-     * Lit un fichier texte via ADB shell (cat) et le copie dans getExternalFilesDir.
-     * Évite le besoin de READ_EXTERNAL_STORAGE pour lire des fichiers dans /sdcard/.
+     * Reads a text file via ADB shell (cat) and copies it to getExternalFilesDir.
+     * Avoids the need for READ_EXTERNAL_STORAGE to read files in
      */
     public interface ReadFileCallback {
         void onSuccess(java.io.File localCopy);
@@ -1418,8 +1417,8 @@ public class AdbLocalClient {
                 try (Dadb dadb = connect(context)) {
                     String content = safeOut(
                             dadb.shell("cat " + remotePath + " 2>&1").getAllOutput());
-                    if (content.contains("No such file") || content.equals("(vide)")) {
-                        callback.onError("Fichier introuvable : " + remotePath);
+                    if (content.contains("No such file") || content.equals("(empty)")) {
+                        callback.onError("File not foundremotePath);
                         return;
                     }
                     java.io.File dst = new java.io.File(
@@ -1439,7 +1438,7 @@ public class AdbLocalClient {
     private static String safeOut(String s) {
         if (s == null) return "(null)";
         s = s.trim();
-        return s.isEmpty() ? "(vide)" : s;
+        return s.isEmpty() ? "(emptyy)" : s;
     }
 
 }

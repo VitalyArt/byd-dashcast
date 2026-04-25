@@ -30,20 +30,20 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * SysInfoActivity — génère un rapport de diagnostic complet du système BYD.
+ * SysInfoActivity — generates a complete diagnostic report of the BYD system.
  *
- * Collecte et affiche :
- *  - Infos Android / appareil / build
- *  - Tous les displays détectés (id, taille, densité, flags, catégorie)
- *  - Méthodes disponibles dans ActivityOptions via réflexion (public + @hide)
- *  - Packages système BYD installés
- *  - Propriétés système Android (ro.product.*, ro.build.*, sys.*)
- *  - Permissions BYDAUTO accordées ou refusées
- *  - Connectivité ADB TCP
+ * Collects and displays:
+ *  - Android / device / build info
+ *  - All detected displays (id, size, density, flags, category)
+ *  - Methods available in ActivityOptions via reflection (public + @hide)
+ *  - BYD system packages installed
+ *  - Android system properties (ro.product.*, ro.build.*, sys.*)
+ *  - BYDAUTO permissions granted or denied
+ *  - ADB TCP connectivity
  *
- * Le rapport est sauvegardé dans :
+ * The report is saved in:
  *   /sdcard/Android/data/com.byd.myapp/files/byd_report_<date>.txt
- * Récupérable via : adb pull /sdcard/Android/data/com.byd.myapp/files/
+ * Retrievable via: adb pull /sdcard/Android/data/com.byd.myapp/files/
  */
 public class SysInfoActivity extends AppCompatActivity {
 
@@ -93,7 +93,7 @@ public class SysInfoActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // Génération du rapport (AsyncTask — réseau dans doInBackground)
+    // Report generation (AsyncTask — network in doInBackground)
     // =========================================================================
 
     @android.annotation.SuppressLint("StaticFieldLeak")
@@ -103,7 +103,7 @@ public class SysInfoActivity extends AppCompatActivity {
         protected void onPreExecute() {
             btnGenerate.setEnabled(false);
             btnSave.setEnabled(false);
-            tvReport.setText("Génération en cours…\n");
+            tvReport.setText("Generating…\n");
             mReport = new StringBuilder();
         }
 
@@ -111,20 +111,20 @@ public class SysInfoActivity extends AppCompatActivity {
         protected String doInBackground(Void... voids) {
             StringBuilder sb = new StringBuilder();
 
-            section(sb, "RAPPORT DIAGNOSTIC BYD SEAL");
+            section(sb, "BYD SEAL DIAGNOSTIC REPORT");
             sb.append("Date : ").append(
                     new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                             .format(new Date())).append("\n");
             sb.append("App  : ").append(getPackageName()).append("\n");
             publishProgress(sb.toString());
 
-            // 1. Infos système
-            section(sb, "1. SYSTÈME ANDROID");
-            sb.append("Modèle        : ").append(Build.MODEL).append("\n");
-            sb.append("Fabricant     : ").append(Build.MANUFACTURER).append("\n");
-            sb.append("Marque        : ").append(Build.BRAND).append("\n");
-            sb.append("Produit       : ").append(Build.PRODUCT).append("\n");
-            sb.append("Appareil      : ").append(Build.DEVICE).append("\n");
+            // 1. System info
+            section(sb, "1. ANDROID SYSTEM");
+            sb.append("Model         : ").append(Build.MODEL).append("\n");
+            sb.append("Manufacturer  : ").append(Build.MANUFACTURER).append("\n");
+            sb.append("Brand         : ").append(Build.BRAND).append("\n");
+            sb.append("Product       : ").append(Build.PRODUCT).append("\n");
+            sb.append("Device        : ").append(Build.DEVICE).append("\n");
             sb.append("Android       : ").append(Build.VERSION.RELEASE)
               .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
             sb.append("Build ID      : ").append(Build.ID).append("\n");
@@ -132,8 +132,8 @@ public class SysInfoActivity extends AppCompatActivity {
             sb.append("Hardware      : ").append(Build.HARDWARE).append("\n");
             publishProgress(sb.toString());
 
-            // 2. Propriétés système
-            section(sb, "2. PROPRIÉTÉS SYSTÈME (SystemProperties)");
+            // 2. System properties
+            section(sb, "2. SYSTEM PROPERTIES (SystemProperties)");
             String[] props = {
                 "ro.product.model", "ro.product.brand", "ro.product.name",
                 "ro.product.device", "ro.product.manufacturer",
@@ -154,15 +154,15 @@ public class SysInfoActivity extends AppCompatActivity {
             }
             publishProgress(sb.toString());
 
-            // 3. Displays détectés
-            section(sb, "3. DISPLAYS DÉTECTÉS");
+            // 3. Detected displays
+            section(sb, "3. DETECTED DISPLAYS");
             DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
             Display[] allDisplays = dm.getDisplays();
             sb.append("Total displays : ").append(allDisplays.length).append("\n\n");
             for (Display d : allDisplays) {
                 sb.append("  Display #").append(d.getDisplayId()).append("\n");
-                sb.append("    Nom       : ").append(d.getName()).append("\n");
-                sb.append("    Taille    : ").append(getDisplaySize(d)).append("\n");
+                sb.append("    Name      : ").append(d.getName()).append("\n");
+                sb.append("    Size      : ").append(getDisplaySize(d)).append("\n");
                 sb.append("    Flags     : 0x").append(Integer.toHexString(d.getFlags()))
                   .append(" ").append(displayFlagsToString(d.getFlags())).append("\n");
                 sb.append("    Rotation  : ").append(d.getRotation()).append("\n");
@@ -181,8 +181,8 @@ public class SysInfoActivity extends AppCompatActivity {
             }
             publishProgress(sb.toString());
 
-            // 4. Réflexion ActivityOptions
-            section(sb, "4. ACTIVITYOPTIONS — MÉTHODES DISPONIBLES");
+            // 4. ActivityOptions reflection
+            section(sb, "4. ACTIVITYOPTIONS — AVAILABLE METHODS");
             try {
                 Method[] methods = android.app.ActivityOptions.class.getDeclaredMethods();
                 for (Method m : methods) {
@@ -194,22 +194,22 @@ public class SysInfoActivity extends AppCompatActivity {
                       .append("\n");
                 }
             } catch (Exception e) {
-                sb.append("  Erreur réflexion : ").append(e.getMessage()).append("\n");
+                sb.append("  Reflection error: ").append(e.getMessage()).append("\n");
             }
 
-            // setLaunchDisplayId spécifique
-            sb.append("\n  setLaunchDisplayId disponible : ");
+            // setLaunchDisplayId specific
+            sb.append("\n  setLaunchDisplayId available: ");
             try {
                 android.app.ActivityOptions.class
                         .getDeclaredMethod("setLaunchDisplayId", int.class);
-                sb.append("OUI\n");
+                sb.append("YES\n");
             } catch (NoSuchMethodException e) {
-                sb.append("NON\n");
+                sb.append("NO\n");
             }
             publishProgress(sb.toString());
 
-            // 5. Packages BYD installés
-            section(sb, "5. PACKAGES SYSTÈME BYD");
+            // 5. BYD packages installed
+            section(sb, "5. BYD SYSTEM PACKAGES");
             PackageManager pm = getPackageManager();
             List<PackageInfo> packages = pm.getInstalledPackages(0);
             int bydCount = 0;
@@ -223,7 +223,7 @@ public class SysInfoActivity extends AppCompatActivity {
                     bydCount++;
                 }
             }
-            if (bydCount == 0) sb.append("  Aucun package BYD trouvé\n");
+            if (bydCount == 0) sb.append("  No BYD package found\n");
             publishProgress(sb.toString());
 
             // 6. Permissions BYDAUTO
@@ -251,7 +251,7 @@ public class SysInfoActivity extends AppCompatActivity {
                 "android.permission.BYDAUTO_TYRE_GET",
                 "android.permission.BYDAUTO_RADAR_COMMON",
                 "android.permission.BYDAUTO_RADAR_GET",
-                // SAFETYBELT_COMMON/_GET retirées : "Unknown permission" sur ROM Seal EU
+                // SAFETYBELT_COMMON/_GET removed: "Unknown permission" on ROM Seal EU
                 "android.permission.BYDAUTO_SENSOR_GET",
             };
             for (String perm : bydPerms) {
@@ -262,13 +262,13 @@ public class SysInfoActivity extends AppCompatActivity {
             }
             publishProgress(sb.toString());
 
-            // 7. Connectivité ADB
-            section(sb, "7. CONNECTIVITÉ ADB TCP");
+            // 7. ADB connectivity
+            section(sb, "7. ADB TCP CONNECTIVITY");
             int[] ports = {5037, 5555, 5554};
             for (int port : ports) {
                 boolean open = isPortOpen("127.0.0.1", port, 800);
                 sb.append(String.format("  127.0.0.1:%-5d %s\n",
-                        port, open ? "OUVERT  ✓" : "fermé"));
+                        port, open ? "OPEN    ✓" : "closed"));
             }
             publishProgress(sb.toString());
 
@@ -277,19 +277,19 @@ public class SysInfoActivity extends AppCompatActivity {
             sb.append(tryInstantiateBydApi());
             publishProgress(sb.toString());
 
-            sb.append("\n=== FIN DU RAPPORT ===\n");
+            sb.append("\n=== END OF REPORT ===\n");
 
-            // Journal de bord en annexe
-            section(sb, "9. JOURNAL DE BORD (AppLogger)");
+            // Logbook in appendix
+            section(sb, "9. LOGBOOK (AppLogger)");
             String log = AppLogger.get();
-            sb.append(log.isEmpty() ? "  (journal vide)\n" : log);
+            sb.append(log.isEmpty() ? "  (empty log)\n" : log);
 
             return sb.toString();
         }
 
         @Override
         protected void onProgressUpdate(String... values) {
-            // Mise à jour progressive du TextView
+            // Progressive update of the TextView
             tvReport.setText(values[values.length - 1]);
             scrollView.post(new Runnable() {
                 @Override public void run() {
@@ -300,7 +300,7 @@ public class SysInfoActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(String result) {
-            AppLogger.log("SysInfo", "Rapport généré");
+            AppLogger.log("SysInfo", "Report generated");
             mReport = new StringBuilder(result);
             tvReport.setText(result);
             btnGenerate.setEnabled(true);
@@ -315,7 +315,7 @@ public class SysInfoActivity extends AppCompatActivity {
     }
 
     // =========================================================================
-    // Sauvegarde dans un fichier
+    // Save to file
     // =========================================================================
 
     private void saveReport() {
@@ -326,11 +326,11 @@ public class SysInfoActivity extends AppCompatActivity {
                 + ".txt";
 
         // getExternalFilesDir() = /sdcard/Android/data/com.byd.myapp/files/
-        // Accessible sans permission sur API 25+, récupérable via :
+        // Accessible without permission on API 25+, retrievable via:
         //   adb pull /sdcard/Android/data/com.byd.myapp/files/
         File outDir = getExternalFilesDir(null);
         if (outDir == null) {
-            outDir = getFilesDir(); // fallback stockage interne
+            outDir = getFilesDir(); // fallback internal storage
         }
         if (!outDir.exists()) outDir.mkdirs();
 
@@ -338,16 +338,16 @@ public class SysInfoActivity extends AppCompatActivity {
         try (FileWriter fw = new FileWriter(outFile)) {
             fw.write(mReport.toString());
         } catch (IOException e) {
-            Toast.makeText(this, "Erreur écriture : " + e.getMessage(),
+            Toast.makeText(this, "Write error: " + e.getMessage(),
                     Toast.LENGTH_LONG).show();
             return;
         }
 
         Toast.makeText(this,
-                "Rapport sauvegardé :\n" + outFile.getAbsolutePath(),
+                "Report saved:\n" + outFile.getAbsolutePath(),
                 Toast.LENGTH_LONG).show();
 
-        // Afficher le chemin dans le rapport lui-même
+        // Display the path in the report itself
         tvReport.append("\n\nFichier : " + outFile.getAbsolutePath()
                 + "\nCommande ADB : adb pull \"" + outFile.getAbsolutePath() + "\"");
     }
@@ -369,7 +369,7 @@ public class SysInfoActivity extends AppCompatActivity {
             Class<?> sp = Class.forName("android.os.SystemProperties");
             Method get = sp.getMethod("get", String.class, String.class);
             String val = (String) get.invoke(null, key, "");
-            return val == null || val.isEmpty() ? "(non défini)" : val;
+            return val == null || val.isEmpty() ? "(undefined)" : val;
         } catch (Exception e) {
             return "(erreur: " + e.getMessage() + ")";
         }
@@ -388,7 +388,7 @@ public class SysInfoActivity extends AppCompatActivity {
         if ((flags & Display.FLAG_SUPPORTS_PROTECTED_BUFFERS) != 0) parts.add("PROTECTED");
         if ((flags & Display.FLAG_PRIVATE)           != 0) parts.add("PRIVATE");
         if ((flags & Display.FLAG_PRESENTATION)      != 0) parts.add("PRESENTATION");
-        return parts.isEmpty() ? "aucun" : parts.toString();
+        return parts.isEmpty() ? "none" : parts.toString();
     }
 
     private String displayStateToString(int state) {
@@ -441,11 +441,11 @@ public class SysInfoActivity extends AppCompatActivity {
                         shortName,
                         instance != null ? "✓ getInstance() OK" : "✗ getInstance() → null"));
             } catch (SecurityException e) {
-                sb.append(String.format("  %-35s ✗ SecurityException (permission manquante)\n", shortName));
+                sb.append(String.format("  %-35s ✗ SecurityException (missing permission)\n", shortName));
             } catch (ClassNotFoundException e) {
-                sb.append(String.format("  %-35s ✗ Classe absente du SDK runtime\n", shortName));
+                sb.append(String.format("  %-35s ✗ Class not found in runtime SDK\n", shortName));
             } catch (NoSuchMethodException e) {
-                sb.append(String.format("  %-35s ✗ getInstance() introuvable\n", shortName));
+                sb.append(String.format("  %-35s ✗ getInstance() not found\n", shortName));
             } catch (Exception e) {
                 sb.append(String.format("  %-35s ✗ %s\n", shortName,
                         e.getClass().getSimpleName() + ": " + e.getMessage()));

@@ -8,32 +8,32 @@ import android.widget.TextView;
 import android.content.Intent;
 
 /**
- * DiagActivity — Outils de diagnostic et configuration.
+ * DiagActivity — Diagnostic tools and configuration.
  *
- * TEST 1 — Connexion ADB locale (prérequis, à faire une seule fois)
- * TEST 2 — Restauration cluster (sendInfo 30→16→18→0)
- * TEST 3 — Taille display cluster (cmd 29 / 30 / 31)
- * TEST 4 — Broadcast BOOT_COMPLETED vers BootReceiver Freedom (headless, sans UI)
+ * TEST 1 — Local ADB connection (prerequisite, to run once)
+ * TEST 2 — Cluster restore (sendInfo 30→16→18→0)
+ * TEST 3 — Cluster display size (cmd 29 / 30 / 31)
+ * TEST 4 — Broadcast BOOT_COMPLETED to Freedom BootReceiver (headless, no UI)
  */
 public class DiagActivity extends AppCompatActivity {
 
-    // TEST 1 — Connexion ADB locale
+    // TEST 1 — Local ADB connection
     private TextView tvAdbLocalResult;
     private Button   btnAdbLocal;
     private Button   btnAdbShare;
 
-    // TEST 2 — Restauration cluster
+    // TEST 2 — Cluster restore
     private TextView tvDisplay1Result;
     private Button   btnDisplay1;
     private Button   btnDisplay1Share;
 
-    // TEST 3 — Taille display cluster
+    // TEST 3 — Cluster display size
     private TextView tvDisplaySizeResult;
     private Button   btnDisplaySize88;       // cmd 29 — 8.8"
     private Button   btnDisplaySize123;      // cmd 30 — 12.3"
     private Button   btnDisplaySize1025;     // cmd 31 — 10.25"
-    private Button   btnDisplaySizeRestore;  // restauration
-    private Button   btnDisplaySizeFull;     // diagnostic complet
+    private Button   btnDisplaySizeRestore;  // restore
+    private Button   btnDisplaySizeFull;     // full diagnostic
     private Button   btnDisplaySizeShare;
 
     // TEST 4 — Broadcast BootReceiver Freedom
@@ -115,30 +115,30 @@ public class DiagActivity extends AppCompatActivity {
         btnDumpSfMirror.setOnClickListener(v -> dumpSurfaceFlinger());
         btnCleanDaemonLogs.setOnClickListener(v -> cleanDaemonLogs());
 
-        // TEST 1 — Connexion ADB locale
+        // TEST 1 — Local ADB connection
         btnAdbShare.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Intent intent = new Intent(Intent.ACTION_SEND);
                 intent.setType("text/plain");
                 intent.putExtra(Intent.EXTRA_TEXT, tvAdbLocalResult.getText().toString());
-                startActivity(Intent.createChooser(intent, "Partager résultat TEST 1"));
+                startActivity(Intent.createChooser(intent, "Share TEST 1 result"));
             }
         });
         btnAdbLocal.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 btnAdbLocal.setEnabled(false);
-                tvAdbLocalResult.setText("Connexion à localhost:5555…\n" +
-                        "⏳ Le popup va apparaître sur cet écran — appuyez AUTORISER.");
-                AppLogger.log("DiagADB", "Lancement connexion ADB locale");
+                tvAdbLocalResult.setText("Connecting to localhost:5555…\n" +
+                        "⏳ The popup will appear on this screen — press ALLOW.");
+                AppLogger.log("DiagADB", "Starting local ADB connection");
                 AdbLocalClient.connectAndGrant(DiagActivity.this,
                         new AdbLocalClient.Callback() {
                     @Override
                     public void onSuccess(final String report) {
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
-                                tvAdbLocalResult.setText("✅ Connexion établie\n\n" + report);
+                                tvAdbLocalResult.setText("✅ Connection established\n\n" + report);
                                 btnAdbLocal.setEnabled(true);
                             }
                         });
@@ -148,10 +148,10 @@ public class DiagActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override public void run() {
                                 tvAdbLocalResult.setText(
-                                        "❌ Échec : " + error + "\n\n" +
-                                        "→ Vérifiez que le débogage ADB TCP est activé\n" +
-                                        "  dans Paramètres → Développeur → Débogage USB\n" +
-                                        "  (ou Débogage sans fil sur cette ROM)");
+                                        "❌ Failed: " + error + "\n\n" +
+                                        "→ Verify that ADB TCP debugging is enabled\n" +
+                                        "  in Settings → Developer → USB Debugging\n" +
+                                        "  (or Wireless Debugging on this ROM)");
                                 btnAdbLocal.setEnabled(true);
                             }
                         });
@@ -167,7 +167,7 @@ public class DiagActivity extends AppCompatActivity {
                 Intent intent = new Intent(Intent.ACTION_SEND);
                 intent.setType("text/plain");
                 intent.putExtra(Intent.EXTRA_TEXT, tvDisplay1Result.getText().toString());
-                startActivity(Intent.createChooser(intent, "Partager résultat TEST 2"));
+                startActivity(Intent.createChooser(intent, "Share TEST 2 result"));
             }
         });
         btnDisplay1.setOnClickListener(new View.OnClickListener() {
@@ -184,7 +184,7 @@ public class DiagActivity extends AppCompatActivity {
                 Intent intent = new Intent(Intent.ACTION_SEND);
                 intent.setType("text/plain");
                 intent.putExtra(Intent.EXTRA_TEXT, tvDisplaySizeResult.getText().toString());
-                startActivity(Intent.createChooser(intent, "Partager résultat TEST 3"));
+                startActivity(Intent.createChooser(intent, "Share TEST 3 result"));
             }
         });
         btnDisplaySize88.setOnClickListener(new View.OnClickListener() {
@@ -215,7 +215,7 @@ public class DiagActivity extends AppCompatActivity {
                 Intent intent = new Intent(Intent.ACTION_SEND);
                 intent.setType("text/plain");
                 intent.putExtra(Intent.EXTRA_TEXT, tvBootReceiverResult.getText().toString());
-                startActivity(Intent.createChooser(intent, "Partager résultat TEST 4"));
+                startActivity(Intent.createChooser(intent, "Share TEST 4 result"));
             }
         });
         btnBootReceiver.setOnClickListener(new View.OnClickListener() {
@@ -270,7 +270,7 @@ public class DiagActivity extends AppCompatActivity {
 
     private void restoreDisplaySize() {
         setDisplaySizeBtnsEnabled(false);
-        tvDisplaySizeResult.setText("⏳ Restauration taille par défaut (cmd 30 + wm reset)…");
+        tvDisplaySizeResult.setText("⏳ Restoring default size (cmd 30 + wm reset)…");
         tvDisplaySizeResult.setBackgroundColor(0xFF111A1A);
         AppLogger.log("DiagDisplaySize", "resetClusterDisplaySize");
 
@@ -336,16 +336,16 @@ public class DiagActivity extends AppCompatActivity {
     private void runDisplayOneLaunch() {
         btnDisplay1.setEnabled(false);
         tvDisplay1Result.setText("⏳ Lancement display 1…");
-        AppLogger.log("DiagDisplay1", "Lancement display 1 démarré");
+        AppLogger.log("DiagDisplay1", "display 1 launch started");
 
         AdbLocalClient.runDisplayOneLaunch(DiagActivity.this, new AdbLocalClient.Callback() {
             @Override
             public void onSuccess(final String report) {
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        // TEST 2 ne lance plus am start — vérifier les réponses parcel AutoContainer.
-                        // Une réponse parcel valide contient "00000000" (parcel vide = succès).
-                        // S'il n'y a pas d'erreur explicite dans le rapport → succès.
+                        // TEST 2 no longer starts am start — check AutoContainer parcel responses.
+                        // A valid parcel response contains "00000000" (empty parcel = success).
+                        // If there is no explicit error in the report → success.
                         boolean ok = !report.contains("Exception")
                                 && !report.contains("Error:")
                                 && !report.contains("FAILED");
@@ -379,7 +379,7 @@ public class DiagActivity extends AppCompatActivity {
         btnBootReceiver.setEnabled(false);
         tvBootReceiverResult.setText(
                 "⏳ Force-stop Freedom puis broadcast BOOT_COMPLETED → BootReceiver…\n"
-                + "Attente 5s pour création VirtualDisplay…");
+                + "Waiting 5s for VirtualDisplay creation…");
         tvBootReceiverResult.setBackgroundColor(0xFF111A1A);
         AppLogger.log("DiagBootReceiver", "Lancement TEST 4");
 
@@ -414,14 +414,14 @@ public class DiagActivity extends AppCompatActivity {
     private static final String SNIFFER_FILE_PREFIX = "BYD_Sniffer_Dump_";
     private java.io.File mCurrentSnifferFile = null;
 
-    /** Génère un fichier horodaté dans le répertoire externe de l'app. */
+    /** Generates a timestamped file in the app's external directory. */
     private java.io.File buildSnifferFile() {
         String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
                 .format(new java.util.Date());
         return new java.io.File(getExternalFilesDir(null), SNIFFER_FILE_PREFIX + ts + ".txt");
     }
 
-    /** Retrouve le fichier sniffer le plus récent dans le répertoire (fallback si mCurrentSnifferFile est null). */
+    /** Finds the most recent sniffer file in the directory (fallback if mCurrentSnifferFile is null). */
     private java.io.File findLatestSnifferFile() {
         java.io.File dir = getExternalFilesDir(null);
         if (dir == null) return null;
@@ -440,12 +440,12 @@ public class DiagActivity extends AppCompatActivity {
         String p = logFile.getAbsolutePath();
 
         android.widget.Toast.makeText(DiagActivity.this,
-                "Sniffeur démarré → " + logFile.getName(),
+                "Sniffer started → " + logFile.getName(),
                 android.widget.Toast.LENGTH_LONG).show();
-        AppLogger.i("DiagSniffer", "Lancement du Sniffeur système → " + p);
+        AppLogger.i("DiagSniffer", "Starting system Sniffer → " + p);
 
-        // ── Header enrichi (synchrone, crée le fichier) ──────────────────────
-        // On vide d'abord le buffer logcat pour n'avoir que les événements futurs.
+        // ── Enriched header (synchronous, creates the file) ──────────────────────
+        // Clear the logcat buffer first to capture only future events.
         String headerCmd =
             "logcat -c 2>/dev/null"
             + " && echo '=== BYD SNIFFER DUMP ===' > " + p
@@ -469,8 +469,8 @@ public class DiagActivity extends AppCompatActivity {
             + " && echo '' >> " + p
             + " && echo '--- MAIN SNIFFER STARTED ---' >> " + p;
 
-        // ── Logcat filtré sur tags pertinents — évite le flood audio/AAudio ──
-        // *:S = silence tout. Ensuite on réactive les tags BYD/display/crash.
+        // ── Logcat filtered on relevant tags — avoids audio/AAudio flood ──────────
+        // *:S = silence all. Then re-enable BYD/display/crash tags.
         String logcatCmd =
             "logcat -v threadtime *:S"
             + " WindowManager:V ActivityManager:V SurfaceFlinger:V"
@@ -479,8 +479,8 @@ public class DiagActivity extends AppCompatActivity {
             + " DEBUG:E dalvikvm:W art:W"
             + " >> " + p + " 2>&1";
 
-        // ── Snapshots périodiques toutes les 30s ──────────────────────────────
-        // \\$ → \$ dans la string Java → $ envoyé au sh interne (date se réduit dans sh -c)
+        // ── Periodic snapshots every 30s ────────────────────────────────
+        // \\$ → \$ in the Java string → $ sent to the inner sh (date expands in sh -c)
         String snapshotCmd =
             "while true; do sleep 30;"
             + " echo '' >> " + p + ";"
@@ -498,7 +498,7 @@ public class DiagActivity extends AppCompatActivity {
     }
 
     private void stopSnifferSilently() {
-        // Kill synchrone sans feedback (appelé avant de relancer le sniffer)
+        // Synchronous kill without feedback (called before restarting the sniffer)
         AdbLocalClient.executeShell(DiagActivity.this, AdbLocalClient.SNIFFER_KILL_CMD);
     }
 
@@ -536,7 +536,7 @@ public class DiagActivity extends AppCompatActivity {
             @Override public void onSuccess(String msg) {
                 runOnUiThread(() -> {
                     tvSnifferScanResult.setText(msg);
-                    boolean active = msg.contains("processus Sniffer détecté");
+                    boolean active = msg.contains("Sniffer process detected");
                     tvSnifferScanResult.setTextColor(active ? 0xFF69F0AE : 0xFFAAAAAA);
                 });
             }
@@ -553,7 +553,7 @@ public class DiagActivity extends AppCompatActivity {
         java.io.File logFile = mCurrentSnifferFile != null ? mCurrentSnifferFile : findLatestSnifferFile();
         if (logFile == null || !logFile.exists() || logFile.length() == 0) {
             android.widget.Toast.makeText(DiagActivity.this,
-                    "Aucun rapport trouvé (démarrez d'abord le sniffer).",
+                    "No report found (start the sniffer first).",
                     android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
@@ -612,14 +612,14 @@ public class DiagActivity extends AppCompatActivity {
     private void dumpSurfaceFlinger() {
         tvSfDumpResult.setText("dumpsys SurfaceFlinger en cours…");
         tvSfDumpResult.setTextColor(0xFFAAAAAA);
-        // Filtre sur notre display + layerStack=2 pour voir si SF connaît le miroir
+        // Filter on our display + layerStack=2 to check if SF knows about the mirror
         String cmd = "dumpsys SurfaceFlinger 2>/dev/null"
                 + " | grep -iE 'byd_myapp_mirror|layerStack=2|fission_bg|virtual'";
         AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
             @Override public void onSuccess(String report) {
                 runOnUiThread(() -> {
                     String text = report.trim().isEmpty()
-                            ? "(aucun résultat — miroir non enregistré dans SF)"
+                            ? "(no result — mirror not registered in SF)"
                             : report.trim();
                     tvSfDumpResult.setText(text);
                     boolean found = report.contains("byd_myapp_mirror");
@@ -642,10 +642,10 @@ public class DiagActivity extends AppCompatActivity {
                 "rm -f /data/local/tmp/mirrordaemon_*.log /data/local/tmp/mirrordaemon_latest.log"
                 + " && echo cleaned");
         runOnUiThread(() -> {
-            tvDaemonScanResult.setText("mirrordaemon_*.log supprimés ✓");
+            tvDaemonScanResult.setText("mirrordaemon_*.log deleted ✓");
             tvDaemonScanResult.setTextColor(0xFF69F0AE);
             android.widget.Toast.makeText(this,
-                    "Logs daemon supprimés", android.widget.Toast.LENGTH_SHORT).show();
+                    "Daemon logs deleted", android.widget.Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -666,21 +666,21 @@ public class DiagActivity extends AppCompatActivity {
         mCurrentSnifferFile = null;
         final int deleted = count;
         runOnUiThread(() -> {
-            tvSnifferScanResult.setText(deleted + " fichier(s) Sniffer supprimé(s) ✓");
+            tvSnifferScanResult.setText(deleted + " Sniffer file(s) deleted ✓");
             tvSnifferScanResult.setTextColor(0xFF69F0AE);
             android.widget.Toast.makeText(this,
-                    deleted + " fichier(s) supprimé(s)", android.widget.Toast.LENGTH_SHORT).show();
+                    deleted + " file(s) deleted", android.widget.Toast.LENGTH_SHORT).show();
         });
     }
 
     private void testLaunchFreedomDaemon() {
         // Non fonctionnel : app_process n'est pas accessible depuis uid=10100,
-        // et CommunicationProcessKt appartient à com.byd.windowmanager (WindowManagement),
-        // pas à notre APK. La commande échoue silencieusement en background.
+        // and CommunicationProcessKt belongs to com.byd.windowmanager (WindowManagement),
+        // not to our APK. The command fails silently in the background.
         android.widget.Toast.makeText(this,
-                "Expérimental — non fonctionnel\n(app_process inaccessible depuis uid=10100)",
+                "Experimental — not functional\n(app_process inaccessible from uid=10100)",
                 android.widget.Toast.LENGTH_LONG).show();
-        AppLogger.w("DiagDaemon", "testLaunchFreedomDaemon() — non fonctionnel sur cette ROM (uid=10100 sans accès app_process)");
+        AppLogger.w("DiagDaemon", "testLaunchFreedomDaemon() — not functional on this ROM (uid=10100 without app_process access)");
     }
 
     private void scanDaemon() {
@@ -727,22 +727,22 @@ public class DiagActivity extends AppCompatActivity {
     }
 
     private void killAndRestartDaemon() {
-        tvDaemonScanResult.setText("Kill + redémarrage en cours…");
+        tvDaemonScanResult.setText("Kill + restart in progress…");
         tvDaemonScanResult.setTextColor(0xFFFFAB40);
         AdbLocalClient.killMirrorDaemon(this, new AdbLocalClient.Callback() {
             @Override public void onSuccess(String msg) {
                 runOnUiThread(() -> tvDaemonScanResult.setText("Kill OK — relancement…"));
                 AdbLocalClient.startMirrorDaemon(DiagActivity.this);
                 runOnUiThread(() -> {
-                    tvDaemonScanResult.setText("MirrorDaemon relancé — vérifiez le log dans 5s");
+                    tvDaemonScanResult.setText("MirrorDaemon restarted — check log in 5s");
                     tvDaemonScanResult.setTextColor(0xFF69F0AE);
                     android.widget.Toast.makeText(DiagActivity.this,
-                            "MirrorDaemon relancé (propre)", android.widget.Toast.LENGTH_SHORT).show();
+                            "MirrorDaemon restarted (clean)", android.widget.Toast.LENGTH_SHORT).show();
                 });
             }
             @Override public void onError(String error) {
                 runOnUiThread(() -> {
-                    tvDaemonScanResult.setText("Kill échoué : " + error);
+                    tvDaemonScanResult.setText("Kill failed: " + error);
                     tvDaemonScanResult.setTextColor(0xFFFF5252);
                 });
             }
