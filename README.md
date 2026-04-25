@@ -358,6 +358,7 @@ BYDAppLog_CL | where Tag_s in ("ClusterMirrorManager","AdbLocalClient","ClusterM
 | Version | Summary |
 |---------|---------|
 | **0.1.0-alpha** | First public release — cluster mirror working (image + touch) |
+| **0.1.2-alpha** | EN translation, DashCast rename, new icon — device-validated |
 
 Full internal development history: [CHANGELOG.md](CHANGELOG.md)
 
