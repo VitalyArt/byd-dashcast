@@ -35,9 +35,8 @@ BYD APIs.
 | 9 | **⚙ Settings** | Cluster screen size: 8.8" / 12.3" (Seal EU default) / 10.25" |
 | 10 | **🔧 Diagnostic** | 4 ADB tests (permissions, cluster restore, display size, Freedom BootReceiver) |
 | 11 | **📋 System report** | Displays, permissions, build tags, APK signature |
-| 12 | **Live log** | LogActivity — DEBUG/INFO/WARN/ERROR levels, filters,  export |
-| 13 | **☁  Export** | Push to remote log analytics (HMAC-SHA256, table `BYDAppLog_CL`) |
-| 14 | **Multilingual** | French / English, selected on first launch |
+| 12 | **Live log** | LogActivity — DEBUG/INFO/WARN/ERROR levels, filters, share |
+| 13 | **Multilingual** | French / English, selected on first launch |
 
 ---
 
@@ -67,8 +66,7 @@ app/src/main/java/com/byd/myapp/
 ├── AdbLocalClient.java         — All ADB logic (dadb, localhost:5555)
 ├── AppListAdapter.java         — RecyclerView (→ Cluster / ← Main / → Cluster / ✕)
 ├── AppLogger.java              — Singleton logger (levels, 3000 entries, saveToFile, share)
-├── LogExporter.java       — HTTP Data Collector → remote log analytics
-├── LogActivity.java            — Real-time log (filters, auto-scroll, )
+├── LogActivity.java            — Real-time log (filters, auto-scroll, share)
 ├── FloatingLogButton.java      — Floating overlay (DEBUG builds only)
 ├── LocaleHelper.java           — Language persistence (SharedPreferences)
 ├── daemon/
@@ -216,8 +214,6 @@ This project requires BYD SDK v1.0.5 (modified `android.jar` with `android.hardw
 
 ```properties
 sdk.dir=/path/to/sdk/SDK_v1.0.5/byd-auto_sdk_windows
-
-
 ```
 
 ### Signing
@@ -251,7 +247,7 @@ cd MyBYDApp   # repo folder name
 | `INJECT_EVENTS` | signature | Touch/key injection to the cluster |
 | `SYSTEM_ALERT_WINDOW` | dangerous | Floating overlay (FloatingLogButton) |
 | `FOREGROUND_SERVICE` | normal | ClusterService |
-| `INTERNET` | normal | remote log analytics export |
+| `INTERNET` | normal | Network access (reserved for future use) |
 | `BYDAUTO_*_COMMON` (×11) | dangerous | BYD vehicle APIs (declared, not yet used) |
 | `BYDAUTO_*_GET` | signature | Extended read (not grantable without real BYD key) |
 
@@ -339,14 +335,6 @@ Freedom returns immediately without creating the VirtualDisplay.
 
 ```bash
 adb pull /sdcard/Android/data/com.byd.myapp/files/  # package ID unchanged
-```
-
-###  KQL queries
-
-```kql
-BYDAppLog_CL | order by TimeGenerated desc | take 200
-BYDAppLog_CL | where Level_s in ("WARN","ERROR") | order by TimeGenerated desc
-BYDAppLog_CL | where Tag_s in ("ClusterMirrorManager","AdbLocalClient","ClusterManager")
 ```
 
 ---
