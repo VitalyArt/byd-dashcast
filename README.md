@@ -36,10 +36,10 @@ BYD APIs.
 | 6 | **Restore BYD** | `sendInfo(18+0)` → Qt regains control of the cluster |
 | 7 | **Origin cluster** | `sendInfo(30+18+0)` → restores correct resolution + Qt |
 | 8 | **⚙ Settings** | Cluster screen size: 8.8" / 12.3" (Seal EU default) / 10.25" |
-| 9 | **🔧 Diagnostic** | 4 ADB tests (permissions, cluster restore, display size, Freedom BootReceiver) |
+| 9 | **🔧 Diagnostic** | 7 tests: ADB/permissions, cluster restore, display size, Freedom BootReceiver, MirrorDaemon, Sniffer, cluster orientation |
 | 10 | **📋 System report** | Displays, permissions, build tags, APK signature |
 | 11 | **Live log** | LogActivity — DEBUG/INFO/WARN/ERROR levels, filters, share |
-| 12 | **Multilingual** | French / English, selected on first launch |
+| 12 | **Multilingual** | French / English / German / Italian / Turkish, selected on first launch |
 
 ---
 
@@ -63,7 +63,7 @@ with DiLink 3.0.
 app/src/main/java/com/byd/myapp/
 ├── MainActivity.java           — Main 15.6" screen: app list, cluster mirror, split
 ├── WelcomeActivity.java        — Language selection (first launch)
-├── DiagActivity.java           — Tests 1–4 (ADB, restore, display size, BootReceiver)
+├── DiagActivity.java           — Tests 1–7 (ADB, restore, display size, BootReceiver, MirrorDaemon, Sniffer, cluster orientation)
 ├── SysInfoActivity.java        — System report + share
 ├── ClusterService.java         — Foreground service: cluster projection independent of Activity lifecycle
 ├── AdbLocalClient.java         — All ADB logic (dadb, localhost:5555)
@@ -236,7 +236,7 @@ The `app/build.gradle` signing config applies this keystore for both debug and r
 ```bash
 cd MyBYDApp   # repo folder name
 ./gradlew assembleDebug
-# APK → app/build/outputs/apk/debug/DashCast-v0.1.1-alpha-debug.apk
+# APK → app/build/outputs/apk/debug/DashCast-v0.1.6-alpha-debug.apk
 ```
 
 ---
@@ -331,6 +331,9 @@ Freedom returns immediately without creating the VirtualDisplay.
 2. **TEST 2** → cluster restore (sendInfo 30→16→18→0)
 3. **TEST 3** → cluster display size change (cmd 29/30/31)
 4. **TEST 4** → BOOT_COMPLETED broadcast to Freedom BootReceiver (headless)
+5. **TEST 5** → MirrorDaemon: scan / kill / kill+restart / export logs / SurfaceFlinger dump
+6. **TEST 6** → Sniffer: scan / start / stop / export logcat report / clean logs
+7. **TEST 7** → Cluster orientation: freeze LANDSCAPE/PORTRAIT / unfreeze / read rotation (`IWindowManager.freezeDisplayRotation` — no `wm size`)
 
 ### Retrieve logs without USB cable
 
@@ -346,8 +349,10 @@ adb pull /sdcard/Android/data/com.byd.myapp/files/  # package ID unchanged
 |---------|---------|
 | **0.1.0-alpha** | First public release — cluster mirror working (image + touch) |
 | **0.1.1-alpha** | Bug fixes, code sanity, README improvements |
-| **0.1.2-alpha** | EN translation, DashCast rename, new icon — device-validated |
-
+| **0.1.2-alpha** | EN translation, DashCast rename, new icon — device-validated || **0.1.3-alpha** | Full i18n (FR/EN/DE/IT/TR), string externalization |
+| **0.1.4-alpha** | Fix touch offset bug in cluster mirror input forwarding |
+| **0.1.5-alpha** | Stability improvements |
+| **0.1.6-alpha** | TEST 7: cluster orientation control via `IWindowManager.freezeDisplayRotation` (no `wm size`) |
 Full internal development history: [CHANGELOG.md](CHANGELOG.md)
 
 ---
