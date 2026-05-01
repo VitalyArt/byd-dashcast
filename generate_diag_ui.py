@@ -1,4 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+import re
+
+xml_content = """<?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -301,7 +303,7 @@
                 android:backgroundTint="#434C5E"/>
         </LinearLayout>
 
-        <!-- 5. SNIFFER SYSTÈME (Reverse Engineering) -->
+        <!-- 5. OUTILS FREEDOM / LEGACY DAEMON -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -311,73 +313,78 @@
             android:padding="16dp"
             android:layout_marginBottom="32dp"
             android:layout_marginHorizontal="4dp">
-
+            
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="5. Sniffer Système (Reverse Engineering)"
+                android:text="5. Freedom Legacy &amp; Sniffer"
                 android:textSize="18sp"
                 android:textColor="#3B4252"
                 android:textStyle="bold"
-                android:layout_marginBottom="6dp"/>
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Capture logcat (tous tags pertinents) + snapshots dumpsys périodiques dans un fichier exportable. Conçu pour le reverse engineering : intercepte display, SF, AM, WM, BYD, autoContainer, Qt, broadcasts."
-                android:textSize="12sp"
-                android:textColor="#4C566A"
                 android:layout_marginBottom="12dp"/>
 
-            <!-- Status -->
+            <!-- Daemon Freedom Status -->
             <TextView
-                android:id="@+id/tv_re_sniffer_status"
+                android:id="@+id/tv_daemon_scan_result"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Inactif"
-                android:textSize="13sp"
-                android:fontFamily="monospace"
+                android:text="Daemon Freedom status: --"
+                android:textSize="12sp"
                 android:background="#E5E9F0"
                 android:padding="8dp"
                 android:layout_marginBottom="8dp"/>
-
-            <!-- Start / Stop -->
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="8dp">
-                <Button
-                    android:id="@+id/btn_re_sniffer_start"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="START"
-                    android:backgroundTint="#A3BE8C"
-                    android:layout_marginRight="4dp"/>
-                <Button
-                    android:id="@+id/btn_re_sniffer_stop"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="STOP"
-                    android:backgroundTint="#BF616A"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="4dp">
+                <Button android:id="@+id/btn_test_daemon" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Launch" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_scan_daemon" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Scan" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_kill_daemon" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Kill"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="16dp">
+                <Button android:id="@+id/btn_kill_restart_daemon" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Restart" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_export_daemon_log" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Export Log" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_clean_daemon_logs" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Clean Log"/>
             </LinearLayout>
 
-            <!-- Snapshot on demand + Export -->
+            <!-- BootReceiver -->
+            <TextView
+                android:id="@+id/tv_boot_receiver_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Boot Broadcast result: --"
+                android:textSize="12sp"
+                android:background="#E5E9F0"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="16dp">
+                <Button android:id="@+id/btn_boot_receiver" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Broadcast Boot" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_boot_receiver_share" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Share"/>
+            </LinearLayout>
+
+            <!-- Sniffer -->
+            <TextView
+                android:id="@+id/tv_sniffer_scan_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Sniffer status: --"
+                android:textSize="12sp"
+                android:background="#E5E9F0"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="4dp">
+                <Button android:id="@+id/btn_start_sniffer" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Start" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_scan_sniffer" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Scan" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_stop_sniffer" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Stop"/>
+            </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button
-                    android:id="@+id/btn_re_sniffer_snapshot"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="Snapshot maintenant"
-                    android:backgroundTint="#5E81AC"
-                    android:layout_marginRight="4dp"/>
-                <Button
-                    android:id="@+id/btn_re_sniffer_export"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="Exporter"
-                    android:backgroundTint="#88C0D0"/>
+                <Button android:id="@+id/btn_export_sniffer" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Export Logs" android:layout_marginRight="4dp"/>
+                <Button android:id="@+id/btn_clean_sniffer_logs" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Clean Logs"/>
             </LinearLayout>
         </LinearLayout>
 
     </LinearLayout>
 </ScrollView>
+"""
+
+with open("app/src/main/res/layout/activity_diag.xml", "w") as f:
+    f.write(xml_content)
+
+print("UI Successfully replaced.")

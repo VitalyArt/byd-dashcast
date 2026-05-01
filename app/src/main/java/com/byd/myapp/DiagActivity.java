@@ -18,7 +18,6 @@ import android.graphics.PixelFormat;
  * TEST 1 — Local ADB connection (prerequisite, to run once)
  * TEST 2 — Cluster restore (sendInfo 30→16→18→0)
  * TEST 3 — Cluster display size (cmd 29 / 30 / 31)
- * TEST 4 — Broadcast BOOT_COMPLETED to Freedom BootReceiver (headless, no UI)
  */
 public class DiagActivity extends AppCompatActivity {
 
@@ -41,25 +40,8 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnDisplaySizeFull;     // full diagnostic
     private Button   btnDisplaySizeShare;
 
-    // TEST 4 — Broadcast BootReceiver Freedom
-    private TextView tvBootReceiverResult;
-    private Button   btnBootReceiver;
-    private Button   btnBootReceiverShare;
-    private Button   btnTestDaemon;
-    private Button   btnScanDaemon;
-    private Button   btnKillDaemon;
-    private Button   btnKillRestartDaemon;
-    private TextView tvDaemonScanResult;
-    private Button   btnStartSniffer;
-    private Button   btnScanSniffer;
-    private Button   btnStopSniffer;
-    private Button   btnExportSniffer;
-    private Button   btnCleanSnifferLogs;
-    private TextView tvSnifferScanResult;
-    private Button   btnExportDaemonLog;
     private Button   btnDumpSfMirror;
     private TextView tvSfDumpResult;
-    private Button   btnCleanDaemonLogs;
 
     // TEST 7 — Cluster orientation
     private Button   btnOrientFreezeLandscape;
@@ -83,6 +65,14 @@ public class DiagActivity extends AppCompatActivity {
     // TEST 16
     private Button btnDaemonVdTest;
     private TextView tvDaemonVdResult;
+
+    // SNIFFER RE
+    private Button   btnReSnifferStart;
+    private Button   btnReSnifferStop;
+    private Button   btnReSnifferSnapshot;
+    private Button   btnReSnifferExport;
+    private TextView tvReSnifferStatus;
+    private java.io.File mReSnifferFile = null;
 
     @Override
     protected void attachBaseContext(android.content.Context base) {
@@ -111,24 +101,8 @@ public class DiagActivity extends AppCompatActivity {
         btnDisplaySizeFull     = (Button)   findViewById(R.id.btn_display_size_full);
         btnDisplaySizeShare    = (Button)   findViewById(R.id.btn_display_size_share);
 
-        tvBootReceiverResult  = (TextView) findViewById(R.id.tv_boot_receiver_result);
-        btnBootReceiver       = (Button)   findViewById(R.id.btn_boot_receiver);
-        btnBootReceiverShare  = (Button)   findViewById(R.id.btn_boot_receiver_share);
-        btnTestDaemon = (Button) findViewById(R.id.btn_test_daemon);
-        btnScanDaemon = (Button) findViewById(R.id.btn_scan_daemon);
-        btnKillDaemon = (Button) findViewById(R.id.btn_kill_daemon);
-        btnKillRestartDaemon = (Button) findViewById(R.id.btn_kill_restart_daemon);
-        tvDaemonScanResult = (TextView) findViewById(R.id.tv_daemon_scan_result);
-        btnScanSniffer = (Button) findViewById(R.id.btn_scan_sniffer);
-        tvSnifferScanResult = (TextView) findViewById(R.id.tv_sniffer_scan_result);
-        btnStartSniffer = (Button) findViewById(R.id.btn_start_sniffer);
-        btnStopSniffer = (Button) findViewById(R.id.btn_stop_sniffer);
-        btnExportSniffer = (Button) findViewById(R.id.btn_export_sniffer);
-        btnCleanSnifferLogs = (Button) findViewById(R.id.btn_clean_sniffer_logs);
-        btnExportDaemonLog = (Button) findViewById(R.id.btn_export_daemon_log);
         btnDumpSfMirror = (Button) findViewById(R.id.btn_dump_sf_mirror);
         tvSfDumpResult = (TextView) findViewById(R.id.tv_sf_dump_result);
-        btnCleanDaemonLogs = (Button) findViewById(R.id.btn_clean_daemon_logs);
 
         // TEST 7 — Cluster orientation
         btnOrientFreezeLandscape = (Button)   findViewById(R.id.btn_orient_freeze_landscape);
@@ -153,18 +127,19 @@ public class DiagActivity extends AppCompatActivity {
         btnDaemonVdTest = (Button) findViewById(R.id.btn_daemon_vd_test);
         tvDaemonVdResult = (TextView) findViewById(R.id.tv_daemon_vd_result);
 
-        btnTestDaemon.setOnClickListener(v -> testLaunchFreedomDaemon());
-        btnScanDaemon.setOnClickListener(v -> scanDaemon());
-        btnKillDaemon.setOnClickListener(v -> killDaemon());
-        btnKillRestartDaemon.setOnClickListener(v -> killAndRestartDaemon());
-        btnScanSniffer.setOnClickListener(v -> scanSniffer());
-        btnStartSniffer.setOnClickListener(v -> startSniffer());
-        btnStopSniffer.setOnClickListener(v -> killSnifferWithFeedback());
-        btnExportSniffer.setOnClickListener(v -> exportSnifferReport());
-        btnCleanSnifferLogs.setOnClickListener(v -> cleanSnifferLogs());
-        btnExportDaemonLog.setOnClickListener(v -> exportDaemonLog());
+        // SNIFFER RE
+        btnReSnifferStart    = (Button)   findViewById(R.id.btn_re_sniffer_start);
+        btnReSnifferStop     = (Button)   findViewById(R.id.btn_re_sniffer_stop);
+        btnReSnifferSnapshot = (Button)   findViewById(R.id.btn_re_sniffer_snapshot);
+        btnReSnifferExport   = (Button)   findViewById(R.id.btn_re_sniffer_export);
+        tvReSnifferStatus    = (TextView) findViewById(R.id.tv_re_sniffer_status);
+
+        btnReSnifferStart   .setOnClickListener(v -> startReSniffer());
+        btnReSnifferStop    .setOnClickListener(v -> stopReSniffer());
+        btnReSnifferSnapshot.setOnClickListener(v -> snapshotReSniffer());
+        btnReSnifferExport  .setOnClickListener(v -> exportReSniffer());
+
         btnDumpSfMirror.setOnClickListener(v -> dumpSurfaceFlinger());
-        btnCleanDaemonLogs.setOnClickListener(v -> cleanDaemonLogs());
         btnOrientFreezeLandscape.setOnClickListener(v -> orientFreezeDisplay(0));
         btnOrientFreezePortrait .setOnClickListener(v -> orientFreezeDisplay(1));
         btnOrientUnfreeze       .setOnClickListener(v -> orientUnfreezeDisplay());
@@ -264,22 +239,6 @@ public class DiagActivity extends AppCompatActivity {
             public void onClick(View v) { runClusterDisplaySizeTest(); }
         });
 
-        // TEST 4 — Broadcast BootReceiver Freedom
-        btnBootReceiverShare.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setType("text/plain");
-                intent.putExtra(Intent.EXTRA_TEXT, tvBootReceiverResult.getText().toString());
-                startActivity(Intent.createChooser(intent, getString(R.string.diag_share_result4_btn)));
-            }
-        });
-        btnBootReceiver.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                runBootReceiverTest();
-            }
-        });
     }
 
 
@@ -425,263 +384,7 @@ public class DiagActivity extends AppCompatActivity {
         });
     }
 
-    // -------------------------------------------------------------------------
-    // TEST 4 : Broadcast BOOT_COMPLETED → BootReceiver Freedom (headless)
-    // -------------------------------------------------------------------------
 
-    private void runBootReceiverTest() {
-        btnBootReceiver.setEnabled(false);
-        tvBootReceiverResult.setText(getString(R.string.diag_boot_receiver_running));
-        tvBootReceiverResult.setBackgroundColor(0xFF111A1A);
-        AppLogger.log("DiagBootReceiver", "Lancement TEST 4");
-
-        AdbLocalClient.sendBootReceiverBroadcast(DiagActivity.this, new AdbLocalClient.Callback() {
-            @Override
-            public void onSuccess(final String report) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        boolean ok = report.contains("✅");
-                        tvBootReceiverResult.setBackgroundColor(ok ? 0xFF1A2A1A : 0xFF2A1A1A);
-                        tvBootReceiverResult.setText(report);
-                        btnBootReceiver.setEnabled(true);
-                        AppLogger.log("DiagBootReceiver", report);
-                    }
-                });
-            }
-            @Override
-            public void onError(final String error) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        tvBootReceiverResult.setBackgroundColor(0xFF2A1A1A);
-                        tvBootReceiverResult.setText("❌ " + error
-                                + "\n\n" + getString(R.string.diag_adb_test1_hint));
-                        btnBootReceiver.setEnabled(true);
-                        AppLogger.log("DiagBootReceiver", "ERREUR: " + error);
-                    }
-                });
-            }
-        });
-    }
-
-    private static final String SNIFFER_FILE_PREFIX = "BYD_Sniffer_Dump_";
-    private java.io.File mCurrentSnifferFile = null;
-
-    /** Generates a timestamped file in the app's external directory. */
-    private java.io.File buildSnifferFile() {
-        String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
-                .format(new java.util.Date());
-        java.io.File dir = getExternalFilesDir(null);
-        if (dir == null) dir = getFilesDir();
-        return new java.io.File(dir, SNIFFER_FILE_PREFIX + ts + ".txt");
-    }
-
-    /** Finds the most recent sniffer file in the directory (fallback if mCurrentSnifferFile is null). */
-    private java.io.File findLatestSnifferFile() {
-        java.io.File dir = getExternalFilesDir(null);
-        if (dir == null) return null;
-        java.io.File[] files = dir.listFiles(
-                f -> f.getName().startsWith(SNIFFER_FILE_PREFIX) && f.getName().endsWith(".txt"));
-        if (files == null || files.length == 0) return null;
-        java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-        return files[0];
-    }
-
-    private void startSniffer() {
-        stopSnifferSilently();
-
-        mCurrentSnifferFile = buildSnifferFile();
-        java.io.File logFile = mCurrentSnifferFile;
-        String p = logFile.getAbsolutePath();
-
-        android.widget.Toast.makeText(DiagActivity.this,
-                getString(R.string.toast_sniffer_started, logFile.getName()),
-                android.widget.Toast.LENGTH_LONG).show();
-        AppLogger.i("DiagSniffer", "Starting system Sniffer → " + p);
-
-        // ── Enriched header (synchronous, creates the file) ──────────────────────
-        // Clear the logcat buffer first to capture only future events.
-        String headerCmd =
-            "logcat -c 2>/dev/null && touch /data/local/tmp/.sniffer_run"
-            + " && echo '=========================================' > " + p
-            + " && echo '===  BYD SNIFFER DUMP (ENHANCED)  ===' >> " + p
-            + " && echo '=========================================' >> " + p
-            + " && date >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- ROM & DEVICE INFO ---' >> " + p
-            + " && getprop ro.product.model >> " + p
-            + " && getprop ro.build.fingerprint >> " + p
-            + " && getprop ro.build.version.release >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- BYD STRICT PROPERTIES ---' >> " + p
-            + " && getprop | grep -i byd >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- PROCESSUS BYD/XDJA/DAEMON/DILINK/QT ---' >> " + p
-            + " && (ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror|dilink|qt|cluster') >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- RELEVANT BYD SERVICES (service list) ---' >> " + p
-            + " && (service list 2>/dev/null | grep -iE 'byd|auto|display|window|freedom|xdja|qt|cluster') >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- DISPLAYS (dumpsys display) ---' >> " + p
-            + " && (dumpsys display 2>/dev/null | grep -A 2 -B 2 -E 'mDisplayId|mName|mState|fission|virtual|cluster|Qt|Screen') >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- WINDOWS (dumpsys window) ---' >> " + p
-            + " && (dumpsys window 2>/dev/null | grep -iE 'mDisplayId|Window \\{|mSurface|fission|cluster|byd|xdja|qt|container' | head -100) >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- SURFACEFLINGER ---' >> " + p
-            + " && (dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|virtual|qt|container' | head -50) >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- RECENT INTENTS/BROADCASTS ---' >> " + p
-            + " && (dumpsys activity broadcasts history 2>/dev/null | grep -iE 'byd|xdja|freedom|qt') | head -30 >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- MAIN SNIFFER STARTED ---' >> " + p;
-
-        // ── Logcat filtered on relevant tags — avoids audio/AAudio flood ──────────
-        // *:S = silence all. Then re-enable BYD/display/crash/event tags.
-        String logcatCmd =
-            "logcat -v threadtime *:S"
-            + " WindowManager:V ActivityManager:V SurfaceFlinger:V"
-            + " AutoContainer:V MirrorDaemon:V"
-            + " byd:V xdja:V freedom:V cluster:V dilink:V diag:V qt:V container:V input:V"
-            + " BYD_*:V Qt*:V"
-            + " DEBUG:E dalvikvm:W art:W"
-            + " >> " + p + " 2>&1";
-
-        // ── Periodic snapshots every 15s ────────────────────────────────
-        // \$ → $ sent to the inner sh (date expands in sh -c)
-        String snapshotCmd =
-            "while [ -f /data/local/tmp/.sniffer_run ]; do sleep 15;"
-            + " echo '' >> " + p + ";"
-            + " echo '--- SNAPSHOT '\\$(date +%H:%M:%S)' ---' >> " + p + ";"
-            + " dumpsys display 2>/dev/null | grep -A 2 -B 2 -E 'mDisplayId|mState|fission|virtual|cluster|qt' | head -15 >> " + p + ";"
-            + " dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|qt' | head -15 >> " + p + ";"
-            + " dumpsys activity broadcasts history 2>/dev/null | grep -iE 'byd|xdja|freedom|sendinfo' | head -15 >> " + p + ";"
-            + " ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror' | wc -l | sed \"s/^/[Process count]: /\" >> " + p + ";"
-            + " done";
-
-        // ── Intent & Event Background Sniffing ────────────────────────────
-        String eventCmd = "logcat -b events -v time | grep -iE 'byd|xdja|qt|cluster|sendinfo' >> " + p + " 2>/dev/null";
-        String inputCmd = "while [ -f /data/local/tmp/.sniffer_run ]; do sleep 5; dumpsys input 2>/dev/null | grep -iE 'FocusedWindow|TouchedWindow|byd|cluster' | head -5 >> " + p + "; done";
-
-        String fullCmd = headerCmd
-                + " && nohup sh -c \"" + logcatCmd + "\" &"
-                + " nohup sh -c \"" + snapshotCmd + "\" &"
-                + " nohup sh -c \"" + eventCmd + "\" &"
-                + " nohup sh -c \"" + inputCmd + "\" &";
-
-        AdbLocalClient.executeShell(DiagActivity.this, fullCmd);
-    }
-
-    private void stopSnifferSilently() {
-        // Synchronous kill without feedback (called before restarting the sniffer)
-        AdbLocalClient.executeShell(DiagActivity.this, AdbLocalClient.SNIFFER_KILL_CMD);
-    }
-
-    private void killSnifferWithFeedback() {
-            tvSnifferScanResult.setText(getString(R.string.diag_sniffer_killing));
-        tvSnifferScanResult.setTextColor(0xFFFFAB40);
-        AdbLocalClient.killSniffer(this, new AdbLocalClient.Callback() {
-            @Override public void onSuccess(String msg) {
-                runOnUiThread(() -> {
-                    tvSnifferScanResult.setText(msg);
-                    tvSnifferScanResult.setTextColor(0xFF69F0AE);
-                    android.widget.Toast.makeText(DiagActivity.this, msg,
-                            android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
-            @Override public void onError(String error) {
-                runOnUiThread(() -> {
-                    tvSnifferScanResult.setText(error);
-                    tvSnifferScanResult.setTextColor(0xFFFF5252);
-                    android.widget.Toast.makeText(DiagActivity.this, error,
-                            android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
-        });
-    }
-
-    private void stopSniffer() {
-        killSnifferWithFeedback();
-    }
-
-    private void scanSniffer() {
-        tvSnifferScanResult.setText(getString(R.string.diag_scanning));
-        tvSnifferScanResult.setTextColor(0xFFAAAAAA);
-        AdbLocalClient.scanSniffer(this, new AdbLocalClient.Callback() {
-            @Override public void onSuccess(String msg) {
-                runOnUiThread(() -> {
-                    tvSnifferScanResult.setText(msg);
-                    boolean active = msg.contains("Sniffer process detected");
-                    tvSnifferScanResult.setTextColor(active ? 0xFF69F0AE : 0xFFAAAAAA);
-                });
-            }
-            @Override public void onError(String error) {
-                runOnUiThread(() -> {
-                    tvSnifferScanResult.setText(error);
-                    tvSnifferScanResult.setTextColor(0xFFFF5252);
-                });
-            }
-        });
-    }
-
-    private void exportSnifferReport() {
-        java.io.File logFile = mCurrentSnifferFile != null ? mCurrentSnifferFile : findLatestSnifferFile();
-        if (logFile == null || !logFile.exists() || logFile.length() == 0) {
-            android.widget.Toast.makeText(DiagActivity.this,
-                    getString(R.string.diag_no_sniffer_report),
-                    android.widget.Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        try {
-            android.net.Uri fileUri = androidx.core.content.FileProvider.getUriForFile(DiagActivity.this, getPackageName() + ".fileprovider", logFile);
-            android.content.Intent shareIntent = new android.content.Intent(android.content.Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(android.content.Intent.EXTRA_STREAM, fileUri);
-            shareIntent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(android.content.Intent.createChooser(shareIntent, getString(R.string.diag_share_sniffer_title)));
-        } catch (Exception e) {
-            AppLogger.e("DiagSniffer", "Erreur export", e);
-        }
-    }
-
-    private void exportDaemonLog() {
-        android.widget.Toast.makeText(this, getString(R.string.diag_daemon_log_reading),
-                android.widget.Toast.LENGTH_SHORT).show();
-        AdbLocalClient.readFileViaAdb(this, "/data/local/tmp/mirrordaemon_latest.log",
-                "mirrordaemon_latest.log", new AdbLocalClient.ReadFileCallback() {
-            @Override
-            public void onSuccess(java.io.File localCopy) {
-                runOnUiThread(() -> {
-                    try {
-                        android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
-                                DiagActivity.this,
-                                getPackageName() + ".fileprovider", localCopy);
-                        android.content.Intent shareIntent = new android.content.Intent(
-                                android.content.Intent.ACTION_SEND);
-                        shareIntent.setType("text/plain");
-                        shareIntent.putExtra(android.content.Intent.EXTRA_STREAM, uri);
-                        shareIntent.putExtra(android.content.Intent.EXTRA_SUBJECT,
-                                "mirrordaemon_latest.log");
-                        shareIntent.addFlags(
-                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        startActivity(android.content.Intent.createChooser(
-                                shareIntent, getString(R.string.diag_share_daemon_log_title)));
-                    } catch (Exception e) {
-                        AppLogger.e("DiagDaemon", "exportDaemonLog share erreur", e);
-                        android.widget.Toast.makeText(DiagActivity.this,
-                                getString(R.string.toast_share_error, e.getMessage()),
-                                android.widget.Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
-            @Override
-            public void onError(String error) {
-                runOnUiThread(() -> android.widget.Toast.makeText(DiagActivity.this,
-                        "mirrordaemon.log : " + error,
-                        android.widget.Toast.LENGTH_LONG).show());
-            }
-        });
-    }
 
     private void dumpSurfaceFlinger() {
         tvSfDumpResult.setText(getString(R.string.diag_sf_dumping));
@@ -705,119 +408,6 @@ public class DiagActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     tvSfDumpResult.setText(getString(R.string.diag_sf_error, error));
                     tvSfDumpResult.setTextColor(0xFFFF5252);
-                });
-            }
-        });
-    }
-
-    private void cleanDaemonLogs() {
-        // Suppression via ADB (fichiers dans /data/local/tmp/, inaccessibles depuis l'app)
-        AdbLocalClient.executeShell(this,
-                "rm -f /data/local/tmp/mirrordaemon_*.log /data/local/tmp/mirrordaemon_latest.log"
-                + " && echo cleaned");
-        runOnUiThread(() -> {
-            tvDaemonScanResult.setText(getString(R.string.diag_daemon_logs_deleted_text));
-            tvDaemonScanResult.setTextColor(0xFF69F0AE);
-            android.widget.Toast.makeText(this,
-                    getString(R.string.toast_daemon_logs_deleted), android.widget.Toast.LENGTH_SHORT).show();
-        });
-    }
-
-    private void cleanSnifferLogs() {
-        java.io.File dir = getExternalFilesDir(null);
-        if (dir == null) {
-            android.widget.Toast.makeText(this, getString(R.string.toast_folder_not_found), android.widget.Toast.LENGTH_SHORT).show();
-            return;
-        }
-        java.io.File[] files = dir.listFiles(
-                f -> f.getName().startsWith(SNIFFER_FILE_PREFIX) && f.getName().endsWith(".txt"));
-        int count = 0;
-        if (files != null) {
-            for (java.io.File f : files) {
-                if (f.delete()) count++;
-            }
-        }
-        mCurrentSnifferFile = null;
-        final int deleted = count;
-        runOnUiThread(() -> {
-            tvSnifferScanResult.setText(getString(R.string.diag_sniffer_files_deleted, deleted));
-            tvSnifferScanResult.setTextColor(0xFF69F0AE);
-            android.widget.Toast.makeText(this,
-                    getString(R.string.toast_files_deleted, deleted), android.widget.Toast.LENGTH_SHORT).show();
-        });
-    }
-
-    private void testLaunchFreedomDaemon() {
-        // Non fonctionnel : app_process n'est pas accessible depuis uid=10100,
-        // and CommunicationProcessKt belongs to com.byd.windowmanager (WindowManagement),
-        // not to our APK. The command fails silently in the background.
-        android.widget.Toast.makeText(this,
-                getString(R.string.toast_experimental),
-                android.widget.Toast.LENGTH_LONG).show();
-        AppLogger.w("DiagDaemon", "testLaunchFreedomDaemon() — not functional on this ROM (uid=10100 without app_process access)");
-    }
-
-    private void scanDaemon() {
-        tvDaemonScanResult.setText(getString(R.string.diag_scanning));
-        tvDaemonScanResult.setTextColor(0xFFAAAAAA);
-        AdbLocalClient.scanMirrorDaemon(this, new AdbLocalClient.Callback() {
-            @Override public void onSuccess(String msg) {
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(msg);
-                    boolean multi = msg.matches("(?s).*[2-9] processus.*");
-                    tvDaemonScanResult.setTextColor(multi ? 0xFFFF5252 : 0xFF69F0AE);
-                });
-            }
-            @Override public void onError(String error) {
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(error);
-                    tvDaemonScanResult.setTextColor(0xFFFF5252);
-                });
-            }
-        });
-    }
-
-    private void killDaemon() {
-        tvDaemonScanResult.setText(getString(R.string.diag_daemon_killing));
-        tvDaemonScanResult.setTextColor(0xFFFFAB40);
-        AdbLocalClient.killMirrorDaemon(this, new AdbLocalClient.Callback() {
-            @Override public void onSuccess(String msg) {
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(msg);
-                    tvDaemonScanResult.setTextColor(0xFF69F0AE);
-                    android.widget.Toast.makeText(DiagActivity.this, msg,
-                            android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
-            @Override public void onError(String error) {
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(error);
-                    tvDaemonScanResult.setTextColor(0xFFFF5252);
-                    android.widget.Toast.makeText(DiagActivity.this, error,
-                            android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
-        });
-    }
-
-    private void killAndRestartDaemon() {
-        tvDaemonScanResult.setText(getString(R.string.diag_kill_restart_in_progress));
-        tvDaemonScanResult.setTextColor(0xFFFFAB40);
-        AdbLocalClient.killMirrorDaemon(this, new AdbLocalClient.Callback() {
-            @Override public void onSuccess(String msg) {
-                runOnUiThread(() -> tvDaemonScanResult.setText(getString(R.string.diag_kill_ok_restarting)));
-                AdbLocalClient.startMirrorDaemon(DiagActivity.this);
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(getString(R.string.diag_daemon_restarted));
-                    tvDaemonScanResult.setTextColor(0xFF69F0AE);
-                    android.widget.Toast.makeText(DiagActivity.this,
-                            getString(R.string.toast_daemon_restarted), android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
-            @Override public void onError(String error) {
-                runOnUiThread(() -> {
-                    tvDaemonScanResult.setText(getString(R.string.diag_kill_failed, error));
-                    tvDaemonScanResult.setTextColor(0xFFFF5252);
                 });
             }
         });
@@ -1077,6 +667,194 @@ public class DiagActivity extends AppCompatActivity {
         } catch (Exception e) {
             tvDaemonVdResult.setText("Erreur APK path: " + e.getMessage());
             btnDaemonVdTest.setEnabled(true);
+        }
+    }
+
+    // =========================================================================
+    // SNIFFER SYSTÈME — Reverse Engineering
+    // =========================================================================
+    // Capture logcat + dumpsys périodiques dans un fichier exportable.
+    // Conçu pour intercepter TOUT ce qui se passe sur le système BYD
+    // sans dépendre de Freedom.
+    // =========================================================================
+
+    private static final String RE_SNIFFER_TAG    = ".re_sniffer_run";
+    private static final String RE_SNIFFER_PIDS    = ".re_sniffer_pids";
+    private static final String RE_SNIFFER_PREFIX  = "BYD_RE_Sniffer_";
+
+    private java.io.File buildReSnifferFile() {
+        String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+                .format(new java.util.Date());
+        java.io.File dir = getExternalFilesDir(null);
+        if (dir == null) dir = getFilesDir();
+        return new java.io.File(dir, RE_SNIFFER_PREFIX + ts + ".txt");
+    }
+
+    private void startReSniffer() {
+        // Toujours tuer les processus précédents avant de relancer
+        killReSnifferProcesses();
+
+        mReSnifferFile = buildReSnifferFile();
+        final String p = mReSnifferFile.getAbsolutePath();
+        AppLogger.i("RESniffer", "Starting RE Sniffer → " + p);
+
+        // ── Header initial (synchrone) ─────────────────────────────────────────
+        String headerCmd =
+            "logcat -c 2>/dev/null"
+            + " && touch /data/local/tmp/" + RE_SNIFFER_TAG
+            + " && echo '============================================' > " + p
+            + " && echo '=== BYD REVERSE ENGINEERING SNIFFER ===' >> " + p
+            + " && echo '============================================' >> " + p
+            + " && date >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- DEVICE ---' >> " + p
+            + " && getprop ro.product.model >> " + p
+            + " && getprop ro.build.fingerprint >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- PROCESSUS SYSTEME (snapshot initial) ---' >> " + p
+            + " && ps -A >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- SERVICES (service list) ---' >> " + p
+            + " && service list >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- DISPLAYS ---' >> " + p
+            + " && dumpsys display 2>/dev/null >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- WINDOWS ---' >> " + p
+            + " && dumpsys window 2>/dev/null >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- SURFACEFLINGER ---' >> " + p
+            + " && dumpsys SurfaceFlinger 2>/dev/null >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- ACTIVITY MANAGER (broadcasts history) ---' >> " + p
+            + " && dumpsys activity broadcasts history 2>/dev/null >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- SNIFFER TEMPS REEL DEMARRE ---' >> " + p;
+
+        // ── Logcat temps réel — TOUT intercepter ──────────────────────────────
+        // On capture tout (pas de filtre *:S) puis on filtre sur les tags utiles.
+        // On garde aussi DEBUG (crash natif) et art (classloader).
+        String logcatCmd =
+            "logcat -v threadtime"
+            + " ActivityManager:V WindowManager:V SurfaceFlinger:V"
+            + " DisplayManagerService:V DisplayManagerGlobal:V"
+            + " AutoContainer:V MirrorDaemon:V DashCastDaemon:V"
+            + " byd:V xdja:V cluster:V dilink:V qt:V container:V"
+            + " BYD_*:V Qt*:V DashCast*:V"
+            + " Binder:V ServiceManager:V"
+            + " am_*:V wm_*:V"
+            + " DEBUG:E art:W dalvikvm:W"
+            + " *:S"
+            + " >> " + p + " 2>&1";
+
+        // ── Snapshots complets toutes les 10s ─────────────────────────────────
+        String snapshotCmd =
+            "while [ -f /data/local/tmp/" + RE_SNIFFER_TAG + " ]; do sleep 10;"
+            + " echo '' >> " + p + ";"
+            + " echo '=== SNAPSHOT '$(date +%H:%M:%S)' ===' >> " + p + ";"
+            + " dumpsys display 2>/dev/null | grep -E 'mDisplayId|mName|mState|fission|virtual|cluster|Qt|layerStack' >> " + p + ";"
+            + " dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|virtual|qt' | head -30 >> " + p + ";"
+            + " dumpsys window 2>/dev/null | grep -iE 'mDisplayId|Window \\{|mSurface|fission|cluster|byd|qt|container' | head -50 >> " + p + ";"
+            + " dumpsys activity broadcasts history 2>/dev/null | tail -30 >> " + p + ";"
+            + " ps -A 2>/dev/null | grep -iE 'byd|xdja|daemon|mirror|dilink|qt|cluster|app_process' >> " + p + ";"
+            + " done";
+
+        // ── Broadcast events (buffer events logcat) ────────────────────────────
+        String eventsCmd =
+            "logcat -b events -v time >> " + p + " 2>/dev/null";
+
+        // ── Lance les 3 processus et stocke leurs PIDs ────────────────────────
+        // On wrappe chaque processus dans un sh qui écrit son PID dans le fichier pids
+        // puis exécute la commande. De cette façon, stopReSniffer peut les kill proprement.
+        String pidFile = "/data/local/tmp/" + RE_SNIFFER_PIDS;
+        String fullCmd = headerCmd
+                + " && echo '' > " + pidFile  // reset pids file
+                + " && nohup sh -c 'echo $$ >> " + pidFile + "; " + logcatCmd + "' &"
+                + " nohup sh -c 'echo $$ >> " + pidFile + "; " + snapshotCmd + "' &"
+                + " nohup sh -c 'echo $$ >> " + pidFile + "; " + eventsCmd + "' &";
+
+        AdbLocalClient.executeShell(this, fullCmd);
+
+        runOnUiThread(() -> {
+            tvReSnifferStatus.setText("ACTIF → " + mReSnifferFile.getName());
+            tvReSnifferStatus.setTextColor(0xFF69F0AE);
+            android.widget.Toast.makeText(this,
+                    "Sniffer démarré : " + mReSnifferFile.getName(),
+                    android.widget.Toast.LENGTH_LONG).show();
+        });
+    }
+
+    /** Tue proprement tous les processus du sniffer (logcat + snapshot loop + events). */
+    private void killReSnifferProcesses() {
+        String pidFile = "/data/local/tmp/" + RE_SNIFFER_PIDS;
+        // 1. Supprimer le flag → arrête le while loop des snapshots
+        // 2. Lire le fichier PIDs et tuer chaque processus
+        // 3. Tuer aussi par pattern en fallback (au cas où le PID file est corrompu)
+        String killCmd =
+            "rm -f /data/local/tmp/" + RE_SNIFFER_TAG
+            + " ; if [ -f " + pidFile + " ]; then"
+            + "   while read pid; do kill -9 \"$pid\" 2>/dev/null; done < " + pidFile + ";"
+            + "   rm -f " + pidFile + ";"
+            + " fi"
+            // Fallback : kill les processus logcat qui écrivent dans nos fichiers RE Sniffer
+            + " ; pkill -f '" + RE_SNIFFER_PREFIX + "' 2>/dev/null || true";
+        AdbLocalClient.executeShell(this, killCmd);
+    }
+
+    private void stopReSniffer() {
+        killReSnifferProcesses();
+        final String fileName = mReSnifferFile != null ? mReSnifferFile.getName() : "aucun";
+        if (mReSnifferFile != null) {
+            AdbLocalClient.executeShell(this,
+                    "echo '[RE Sniffer] Stopped.' >> " + mReSnifferFile.getAbsolutePath());
+        }
+        runOnUiThread(() -> {
+            tvReSnifferStatus.setText("Arrêté — fichier : " + fileName);
+            tvReSnifferStatus.setTextColor(0xFFFF5252);
+            android.widget.Toast.makeText(this, "Sniffer arrêté.", android.widget.Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void snapshotReSniffer() {
+        if (mReSnifferFile == null) {
+            android.widget.Toast.makeText(this, "Démarrer le sniffer d'abord.", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String p = mReSnifferFile.getAbsolutePath();
+        String cmd =
+            "echo '' >> " + p
+            + " && echo '=== SNAPSHOT MANUEL '$(date +%H:%M:%S)' ===' >> " + p
+            + " && echo '--- DISPLAYS ---' >> " + p
+            + " && dumpsys display 2>/dev/null >> " + p
+            + " && echo '--- WINDOWS ---' >> " + p
+            + " && dumpsys window 2>/dev/null >> " + p
+            + " && echo '--- SURFACEFLINGER ---' >> " + p
+            + " && dumpsys SurfaceFlinger 2>/dev/null >> " + p
+            + " && echo '--- PROCESSUS ---' >> " + p
+            + " && ps -A >> " + p
+            + " && echo '--- BROADCASTS ---' >> " + p
+            + " && dumpsys activity broadcasts history 2>/dev/null >> " + p;
+        AdbLocalClient.executeShell(this, cmd);
+        android.widget.Toast.makeText(this, "Snapshot injecté dans le fichier.", android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private void exportReSniffer() {
+        java.io.File logFile = mReSnifferFile;
+        if (logFile == null || !logFile.exists() || logFile.length() == 0) {
+            android.widget.Toast.makeText(this, "Aucun fichier sniffer à exporter.", android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", logFile);
+            android.content.Intent shareIntent = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            shareIntent.setType("text/plain");
+            shareIntent.putExtra(android.content.Intent.EXTRA_STREAM, uri);
+            shareIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, logFile.getName());
+            shareIntent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(android.content.Intent.createChooser(shareIntent, "Exporter Sniffer RE"));
+        } catch (Exception e) {
+            AppLogger.e("RESniffer", "Export erreur", e);
         }
     }
 }
