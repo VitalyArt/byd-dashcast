@@ -91,14 +91,17 @@ public class DiagActivity extends AppCompatActivity {
         AppLogger.lifecycle(getClass().getSimpleName(), "onCreate");
 
         tvAdbLocalResult      = (TextView) findViewById(R.id.tv_adb_local_result);
+        tvAdbLocalResult.setTag("ADB Local");
         btnAdbLocal           = (Button)   findViewById(R.id.btn_adb_local);
         btnAdbShare           = (Button)   findViewById(R.id.btn_adb_share);
 
         tvDisplay1Result      = (TextView) findViewById(R.id.tv_display1_result);
+        tvDisplay1Result.setTag("Display Info");
         btnDisplay1           = (Button)   findViewById(R.id.btn_display1);
         btnDisplay1Share      = (Button)   findViewById(R.id.btn_display1_share);
 
         tvDisplaySizeResult    = (TextView) findViewById(R.id.tv_display_size_result);
+        tvDisplaySizeResult.setTag("Display Size");
         btnDisplaySize88       = (Button)   findViewById(R.id.btn_display_size_88);
         btnDisplaySize123      = (Button)   findViewById(R.id.btn_display_size_123);
         btnDisplaySize1025     = (Button)   findViewById(R.id.btn_display_size_1025);
@@ -108,9 +111,11 @@ public class DiagActivity extends AppCompatActivity {
 
         btnDumpSfMirror = (Button) findViewById(R.id.btn_dump_sf_mirror);
         tvSfDumpResult = (TextView) findViewById(R.id.tv_sf_dump_result);
+        tvSfDumpResult.setTag("SurfaceFlinger Dump");
         btnAutoDisplayStart  = (Button)   findViewById(R.id.btn_auto_display_start);
         btnAutoDisplayStop   = (Button)   findViewById(R.id.btn_auto_display_stop);
         tvAutoDisplayResult  = (TextView) findViewById(R.id.tv_auto_display_result);
+        tvAutoDisplayResult.setTag("AutoDisplayService");
 
         // TEST 7 — Cluster orientation
         btnOrientFreezeLandscape = (Button)   findViewById(R.id.btn_orient_freeze_landscape);
@@ -118,22 +123,27 @@ public class DiagActivity extends AppCompatActivity {
         btnOrientUnfreeze        = (Button)   findViewById(R.id.btn_orient_unfreeze);
         btnOrientRead            = (Button)   findViewById(R.id.btn_orient_read);
         tvOrientationResult      = (TextView) findViewById(R.id.tv_orientation_result);
+        tvOrientationResult.setTag("Orientation");
 
         // TEST 13
         btnTest13      = (Button)   findViewById(R.id.btn_test_13);
         tvTest13Result = (TextView) findViewById(R.id.tv_test_13_result);
+        tvTest13Result.setTag("JNI Qt Surface Probe");
 
         // TEST 14
         btnVdTest      = (Button)   findViewById(R.id.btn_vd_test);
         tvVdResult     = (TextView) findViewById(R.id.tv_vd_result);
+        tvVdResult.setTag("VirtualDisplay Local");
 
         // TEST 15
         btnDumpsysWindows = (Button) findViewById(R.id.btn_dumpsys_windows);
         tvDumpsysResult   = (TextView) findViewById(R.id.tv_dumpsys_result);
+        tvDumpsysResult.setTag("Dumpsys Windows");
 
         // TEST 16
         btnDaemonVdTest = (Button) findViewById(R.id.btn_daemon_vd_test);
         tvDaemonVdResult = (TextView) findViewById(R.id.tv_daemon_vd_result);
+        tvDaemonVdResult.setTag("Daemon VD");
 
         // SNIFFER RE
         btnReSnifferStart    = (Button)   findViewById(R.id.btn_re_sniffer_start);
@@ -141,11 +151,14 @@ public class DiagActivity extends AppCompatActivity {
         btnReSnifferSnapshot = (Button)   findViewById(R.id.btn_re_sniffer_snapshot);
         btnReSnifferExport   = (Button)   findViewById(R.id.btn_re_sniffer_export);
         tvReSnifferStatus    = (TextView) findViewById(R.id.tv_re_sniffer_status);
+        tvReSnifferStatus.setTag("RE Sniffer");
 
         btnReSnifferStart   .setOnClickListener(v -> startReSniffer());
         btnReSnifferStop    .setOnClickListener(v -> stopReSniffer());
         btnReSnifferSnapshot.setOnClickListener(v -> snapshotReSniffer());
         btnReSnifferExport  .setOnClickListener(v -> exportReSniffer());
+
+        setupShareOnLongClick();
 
         btnDumpSfMirror.setOnClickListener(v -> dumpSurfaceFlinger());
         btnAutoDisplayStart.setOnClickListener(v -> startAutoDisplayService());
@@ -774,6 +787,57 @@ public class DiagActivity extends AppCompatActivity {
     private static final String RE_SNIFFER_TAG    = ".re_sniffer_run";
     private static final String RE_SNIFFER_PIDS    = ".re_sniffer_pids";
     private static final String RE_SNIFFER_PREFIX  = "BYD_RE_Sniffer_";
+
+    // =========================================================================
+    // Partage rapide — appui long sur n'importe quel TextView résultat
+    // =========================================================================
+
+    private void setupShareOnLongClick() {
+        TextView[] results = {
+            tvAdbLocalResult, tvDaemonVdResult, tvVdResult, tvDisplaySizeResult,
+            tvDisplay1Result, tvDumpsysResult, tvTest13Result, tvSfDumpResult,
+            tvAutoDisplayResult, tvReSnifferStatus, tvOrientationResult
+        };
+        for (TextView tv : results) {
+            if (tv == null) continue;
+            tv.setLongClickable(true);
+            tv.setOnLongClickListener(v -> {
+                String text = tv.getText().toString().trim();
+                if (text.isEmpty() || text.equals("--")) {
+                    android.widget.Toast.makeText(this,
+                            "Pas de résultat à partager.",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                shareText(tv.getTag() != null ? tv.getTag().toString() : "DashCast Diag", text);
+                return true;
+            });
+        }
+    }
+
+    /**
+     * Lance un Intent de partage texte vers Telegram (en priorité) ou
+     * n'importe quelle app de messagerie via le sélecteur système.
+     */
+    private void shareText(String label, String body) {
+        String full = "[DashCast / " + label + "]\n" + body;
+
+        // Tenter Telegram en direct
+        Intent tg = new Intent(Intent.ACTION_SEND);
+        tg.setType("text/plain");
+        tg.setPackage("org.telegram.messenger");
+        tg.putExtra(Intent.EXTRA_TEXT, full);
+        try {
+            startActivity(tg);
+            return;
+        } catch (android.content.ActivityNotFoundException ignored) {}
+
+        // Fallback : sélecteur générique
+        Intent generic = new Intent(Intent.ACTION_SEND);
+        generic.setType("text/plain");
+        generic.putExtra(Intent.EXTRA_TEXT, full);
+        startActivity(Intent.createChooser(generic, "Partager résultat"));
+    }
 
     private java.io.File buildReSnifferFile() {
         String ts = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
