@@ -470,51 +470,71 @@ public class DiagActivity extends AppCompatActivity {
         // Clear the logcat buffer first to capture only future events.
         String headerCmd =
             "logcat -c 2>/dev/null"
-            + " && echo '=== BYD SNIFFER DUMP ===' > " + p
+            + " && echo '=========================================' > " + p
+            + " && echo '===  BYD SNIFFER DUMP (ENHANCED)  ===' >> " + p
+            + " && echo '=========================================' >> " + p
             + " && date >> " + p
             + " && echo '' >> " + p
-            + " && echo '--- ROM ---' >> " + p
+            + " && echo '--- ROM & DEVICE INFO ---' >> " + p
+            + " && getprop ro.product.model >> " + p
             + " && getprop ro.build.fingerprint >> " + p
             + " && getprop ro.build.version.release >> " + p
             + " && echo '' >> " + p
-            + " && echo '--- PROCESSUS BYD/XDJA/DAEMON ---' >> " + p
-            + " && (ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror') >> " + p
+            + " && echo '--- BYD STRICT PROPERTIES ---' >> " + p
+            + " && getprop | grep -i byd >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- PROCESSUS BYD/XDJA/DAEMON/DILINK/QT ---' >> " + p
+            + " && (ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror|dilink|qt|cluster') >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- RELEVANT BYD SERVICES (service list) ---' >> " + p
+            + " && (service list 2>/dev/null | grep -iE 'byd|auto|display|window|freedom|xdja|qt|cluster') >> " + p
             + " && echo '' >> " + p
             + " && echo '--- DISPLAYS (dumpsys display) ---' >> " + p
-            + " && (dumpsys display 2>/dev/null | grep -E 'mDisplayId|mName|mState|fission|virtual|cluster' | head -25) >> " + p
+            + " && (dumpsys display 2>/dev/null | grep -A 2 -B 2 -E 'mDisplayId|mName|mState|fission|virtual|cluster|Qt|Screen') >> " + p
             + " && echo '' >> " + p
-            + " && echo '--- WINDOWS (dumpsys window displays) ---' >> " + p
-            + " && (dumpsys window displays 2>/dev/null | head -50) >> " + p
+            + " && echo '--- WINDOWS (dumpsys window) ---' >> " + p
+            + " && (dumpsys window 2>/dev/null | grep -iE 'mDisplayId|Window \\{|mSurface|fission|cluster|byd|xdja|qt|container' | head -100) >> " + p
             + " && echo '' >> " + p
             + " && echo '--- SURFACEFLINGER ---' >> " + p
-            + " && (dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|virtual' | head -30) >> " + p
+            + " && (dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|virtual|qt|container' | head -50) >> " + p
+            + " && echo '' >> " + p
+            + " && echo '--- RECENT INTENTS/BROADCASTS ---' >> " + p
+            + " && (dumpsys activity broadcasts history 2>/dev/null | grep -iE 'byd|xdja|freedom|qt') | head -30 >> " + p
             + " && echo '' >> " + p
             + " && echo '--- MAIN SNIFFER STARTED ---' >> " + p;
 
         // ── Logcat filtered on relevant tags — avoids audio/AAudio flood ──────────
-        // *:S = silence all. Then re-enable BYD/display/crash tags.
+        // *:S = silence all. Then re-enable BYD/display/crash/event tags.
         String logcatCmd =
             "logcat -v threadtime *:S"
             + " WindowManager:V ActivityManager:V SurfaceFlinger:V"
             + " AutoContainer:V MirrorDaemon:V"
-            + " byd:V xdja:V freedom:V cluster:V"
+            + " byd:V xdja:V freedom:V cluster:V dilink:V diag:V qt:V container:V input:V"
+            + " BYD_*:V Qt*:V"
             + " DEBUG:E dalvikvm:W art:W"
             + " >> " + p + " 2>&1";
 
-        // ── Periodic snapshots every 30s ────────────────────────────────
-        // \\$ → \$ in the Java string → $ sent to the inner sh (date expands in sh -c)
+        // ── Periodic snapshots every 15s ────────────────────────────────
+        // \$ → $ sent to the inner sh (date expands in sh -c)
         String snapshotCmd =
-            "while true; do sleep 30;"
+            "while true; do sleep 15;"
             + " echo '' >> " + p + ";"
             + " echo '--- SNAPSHOT '\\$(date +%H:%M:%S)' ---' >> " + p + ";"
-            + " dumpsys display 2>/dev/null | grep -E 'mDisplayId|mState|fission|virtual' | head -10 >> " + p + ";"
-            + " dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror' | head -10 >> " + p + ";"
-            + " ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror' >> " + p + ";"
+            + " dumpsys display 2>/dev/null | grep -A 2 -B 2 -E 'mDisplayId|mState|fission|virtual|cluster|qt' | head -15 >> " + p + ";"
+            + " dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|qt' | head -15 >> " + p + ";"
+            + " dumpsys activity broadcasts history 2>/dev/null | grep -iE 'byd|xdja|freedom|sendinfo' | head -15 >> " + p + ";"
+            + " ps -A 2>/dev/null | grep -iE 'byd|xdja|freedom|daemon|mirror' | wc -l | sed \"s/^/[Process count]: /\" >> " + p + ";"
             + " done";
+
+        // ── Intent & Event Background Sniffing ────────────────────────────
+        String eventCmd = "logcat -b events -v time | grep -iE 'byd|xdja|qt|cluster|sendinfo' >> " + p + " 2>/dev/null";
+        String inputCmd = "while true; do sleep 5; dumpsys input 2>/dev/null | grep -iE 'FocusedWindow|TouchedWindow|byd|cluster' | head -5 >> " + p + "; done";
 
         String fullCmd = headerCmd
                 + " && nohup sh -c \"" + logcatCmd + "\" &"
-                + " nohup sh -c \"" + snapshotCmd + "\" &";
+                + " nohup sh -c \"" + snapshotCmd + "\" &"
+                + " nohup sh -c \"" + eventCmd + "\" &"
+                + " nohup sh -c \"" + inputCmd + "\" &";
 
         AdbLocalClient.executeShell(DiagActivity.this, fullCmd);
     }
