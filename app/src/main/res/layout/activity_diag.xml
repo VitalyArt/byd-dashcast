@@ -298,7 +298,52 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Dump Mirror Service"
-                android:backgroundTint="#434C5E"/>
+                android:backgroundTint="#434C5E"
+                android:layout_marginBottom="16dp"/>
+
+            <!-- AutoDisplayService — chemin direct Qt Surface → VirtualDisplay -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="AutoDisplayService (com.xdja.containerservice)"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#3B4252"
+                android:layout_marginBottom="4dp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Démarre le service Qt→VirtualDisplay directement. C'est le mécanisme interne de Dilink5 : il récupère la Surface native Qt du cluster et la passe à createVirtualDisplay."
+                android:textSize="11sp"
+                android:textColor="#4C566A"
+                android:layout_marginBottom="8dp"/>
+            <TextView
+                android:id="@+id/tv_auto_display_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:background="#E5E9F0"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <Button
+                    android:id="@+id/btn_auto_display_start"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="START AutoDisplayService"
+                    android:backgroundTint="#A3BE8C"
+                    android:layout_marginRight="4dp"/>
+                <Button
+                    android:id="@+id/btn_auto_display_stop"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="STOP"
+                    android:backgroundTint="#BF616A"/>
+            </LinearLayout>
         </LinearLayout>
 
         <!-- 5. SNIFFER SYSTÈME (Reverse Engineering) -->

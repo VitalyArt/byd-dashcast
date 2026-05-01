@@ -74,6 +74,11 @@ public class DiagActivity extends AppCompatActivity {
     private TextView tvReSnifferStatus;
     private java.io.File mReSnifferFile = null;
 
+    // AutoDisplayService
+    private Button   btnAutoDisplayStart;
+    private Button   btnAutoDisplayStop;
+    private TextView tvAutoDisplayResult;
+
     @Override
     protected void attachBaseContext(android.content.Context base) {
         super.attachBaseContext(LocaleHelper.applyLocale(base));
@@ -103,6 +108,9 @@ public class DiagActivity extends AppCompatActivity {
 
         btnDumpSfMirror = (Button) findViewById(R.id.btn_dump_sf_mirror);
         tvSfDumpResult = (TextView) findViewById(R.id.tv_sf_dump_result);
+        btnAutoDisplayStart  = (Button)   findViewById(R.id.btn_auto_display_start);
+        btnAutoDisplayStop   = (Button)   findViewById(R.id.btn_auto_display_stop);
+        tvAutoDisplayResult  = (TextView) findViewById(R.id.tv_auto_display_result);
 
         // TEST 7 — Cluster orientation
         btnOrientFreezeLandscape = (Button)   findViewById(R.id.btn_orient_freeze_landscape);
@@ -140,6 +148,8 @@ public class DiagActivity extends AppCompatActivity {
         btnReSnifferExport  .setOnClickListener(v -> exportReSniffer());
 
         btnDumpSfMirror.setOnClickListener(v -> dumpSurfaceFlinger());
+        btnAutoDisplayStart.setOnClickListener(v -> startAutoDisplayService());
+        btnAutoDisplayStop .setOnClickListener(v -> stopAutoDisplayService());
         btnOrientFreezeLandscape.setOnClickListener(v -> orientFreezeDisplay(0));
         btnOrientFreezePortrait .setOnClickListener(v -> orientFreezeDisplay(1));
         btnOrientUnfreeze       .setOnClickListener(v -> orientUnfreezeDisplay());
@@ -386,6 +396,72 @@ public class DiagActivity extends AppCompatActivity {
 
 
 
+    // -------------------------------------------------------------------------
+    // AutoDisplayService — start/stop via ADB local
+    // Chemin direct : Qt Surface native → createVirtualDisplay (mécanisme Dilink5)
+    // -------------------------------------------------------------------------
+
+    private static final String AUTO_DISPLAY_PKG = "com.xdja.containerservice";
+    private static final String AUTO_DISPLAY_SVC = AUTO_DISPLAY_PKG + "/.AutoDisplayService";
+
+    private void startAutoDisplayService() {
+        tvAutoDisplayResult.setText("Démarrage via ADB...");
+        tvAutoDisplayResult.setTextColor(0xFFFFAB40);
+        btnAutoDisplayStart.setEnabled(false);
+
+        String cmd = "am startservice " + AUTO_DISPLAY_SVC
+                + " 2>&1"
+                // Vérifier si le display est apparu après 1s
+                + " && sleep 1"
+                + " && dumpsys display 2>/dev/null | grep -E 'mDisplayId|mName|mState|virtual|fission' | head -20";
+
+        AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String report) {
+                runOnUiThread(() -> {
+                    boolean started = !report.contains("Error") && !report.contains("not found");
+                    boolean newDisplay = report.contains("mDisplayId=1")
+                            || report.contains("remote_dashboard")
+                            || report.contains("fission");
+                    String status = started ? "✅ Service démarré\n" : "⚠️ Réponse inattendue\n";
+                    status += newDisplay ? "✅ Nouveau display détecté !\n" : "⚠️ Aucun nouveau display (normal si Qt pas prêt)\n";
+                    status += "\n" + report.trim();
+                    tvAutoDisplayResult.setText(status);
+                    tvAutoDisplayResult.setTextColor(newDisplay ? 0xFF69F0AE : 0xFFFFAB40);
+                    btnAutoDisplayStart.setEnabled(true);
+                    AppLogger.i("AutoDisplay", report);
+                });
+            }
+            @Override public void onError(String error) {
+                runOnUiThread(() -> {
+                    tvAutoDisplayResult.setText("❌ " + error);
+                    tvAutoDisplayResult.setTextColor(0xFFFF5252);
+                    btnAutoDisplayStart.setEnabled(true);
+                });
+            }
+        });
+    }
+
+    private void stopAutoDisplayService() {
+        tvAutoDisplayResult.setText("Arrêt via ADB...");
+        tvAutoDisplayResult.setTextColor(0xFFFFAB40);
+        AdbLocalClient.executeShellWithResult(this,
+                "am stopservice " + AUTO_DISPLAY_SVC + " 2>&1",
+                new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String report) {
+                runOnUiThread(() -> {
+                    tvAutoDisplayResult.setText("STOP: " + report.trim());
+                    tvAutoDisplayResult.setTextColor(0xFFFF5252);
+                });
+            }
+            @Override public void onError(String error) {
+                runOnUiThread(() -> {
+                    tvAutoDisplayResult.setText("❌ " + error);
+                    tvAutoDisplayResult.setTextColor(0xFFFF5252);
+                });
+            }
+        });
+    }
+
     private void dumpSurfaceFlinger() {
         tvSfDumpResult.setText(getString(R.string.diag_sf_dumping));
         tvSfDumpResult.setTextColor(0xFFAAAAAA);
@@ -598,9 +674,10 @@ public class DiagActivity extends AppCompatActivity {
     private void testVirtualDisplayAPI() {
         tvVdResult.setText("Appel en cours...");
         btnVdTest.setEnabled(false);
+        ImageReader reader = null;
         try {
             DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
-            ImageReader reader = ImageReader.newInstance(1920, 720, PixelFormat.RGBA_8888, 2);
+            reader = ImageReader.newInstance(1920, 720, PixelFormat.RGBA_8888, 2);
             VirtualDisplay vd = dm.createVirtualDisplay("remote_dashboard", 1920, 720, 320, reader.getSurface(), 320);
             if (vd != null) {
                 tvVdResult.setText("SUCCES MYSTERIEUX ! Un VirtualDisplay a pu etre cree par l'app !\nID: " 
@@ -613,6 +690,8 @@ public class DiagActivity extends AppCompatActivity {
             tvVdResult.setText("EXCEPTION DE SECURITE (Attendu) :\n" + se.getMessage());
         } catch (Exception e) {
             tvVdResult.setText("ERREUR : " + e.getMessage());
+        } finally {
+            if (reader != null) reader.close();
         }
         btnVdTest.setEnabled(true);
     }
@@ -642,15 +721,27 @@ public class DiagActivity extends AppCompatActivity {
         });
     }
 
+    private static final long DAEMON_TIMEOUT_MS = 15_000;
+
     private void runDaemonVdTest() {
         tvDaemonVdResult.setText("Lancement du daemon via adb local...");
         btnDaemonVdTest.setEnabled(false);
+
+        // Timeout de sécurité : réactive le bouton si ADB ne répond pas dans les 15s
+        android.os.Handler timeoutHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        Runnable timeoutAction = () -> {
+            tvDaemonVdResult.setText("TIMEOUT : ADB n'a pas répondu dans " + (DAEMON_TIMEOUT_MS / 1000) + "s.");
+            btnDaemonVdTest.setEnabled(true);
+        };
+        timeoutHandler.postDelayed(timeoutAction, DAEMON_TIMEOUT_MS);
+
         try {
             String apkPath = getPackageManager().getApplicationInfo(getPackageName(), 0).sourceDir;
             String cmd = "app_process -Djava.class.path=" + apkPath + " /system/bin com.byd.myapp.dashboard.DashCastDaemon";
             AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
                 @Override
                 public void onSuccess(final String report) {
+                    timeoutHandler.removeCallbacks(timeoutAction);
                     runOnUiThread(() -> {
                         tvDaemonVdResult.setText("DAEMON OUTPUT: " + report);
                         btnDaemonVdTest.setEnabled(true);
@@ -658,6 +749,7 @@ public class DiagActivity extends AppCompatActivity {
                 }
                 @Override
                 public void onError(final String error) {
+                    timeoutHandler.removeCallbacks(timeoutAction);
                     runOnUiThread(() -> {
                         tvDaemonVdResult.setText("ERREUR: " + error);
                         btnDaemonVdTest.setEnabled(true);
@@ -665,6 +757,7 @@ public class DiagActivity extends AppCompatActivity {
                 }
             });
         } catch (Exception e) {
+            timeoutHandler.removeCallbacks(timeoutAction);
             tvDaemonVdResult.setText("Erreur APK path: " + e.getMessage());
             btnDaemonVdTest.setEnabled(true);
         }
