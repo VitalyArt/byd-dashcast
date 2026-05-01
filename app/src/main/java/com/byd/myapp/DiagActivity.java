@@ -63,6 +63,10 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnOrientRead;
     private TextView tvOrientationResult;
 
+    // TEST 13 — JNI Qt Surface
+    private Button   btnTest13;
+    private TextView tvTest13Result;
+
     @Override
     protected void attachBaseContext(android.content.Context base) {
         super.attachBaseContext(LocaleHelper.applyLocale(base));
@@ -116,6 +120,10 @@ public class DiagActivity extends AppCompatActivity {
         btnOrientRead            = (Button)   findViewById(R.id.btn_orient_read);
         tvOrientationResult      = (TextView) findViewById(R.id.tv_orientation_result);
 
+        // TEST 13
+        btnTest13      = (Button)   findViewById(R.id.btn_test_13);
+        tvTest13Result = (TextView) findViewById(R.id.tv_test_13_result);
+
         btnTestDaemon.setOnClickListener(v -> testLaunchFreedomDaemon());
         btnScanDaemon.setOnClickListener(v -> scanDaemon());
         btnKillDaemon.setOnClickListener(v -> killDaemon());
@@ -132,6 +140,8 @@ public class DiagActivity extends AppCompatActivity {
         btnOrientFreezePortrait .setOnClickListener(v -> orientFreezeDisplay(1));
         btnOrientUnfreeze       .setOnClickListener(v -> orientUnfreezeDisplay());
         btnOrientRead           .setOnClickListener(v -> orientReadDisplay());
+
+        btnTest13.setOnClickListener(v -> runJniSurfaceProbe());
 
         // TEST 1 — Local ADB connection
         btnAdbShare.setOnClickListener(new View.OnClickListener() {
@@ -877,6 +887,64 @@ public class DiagActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     tvOrientationResult.setText("❌ " + error);
                     tvOrientationResult.setTextColor(0xFFFF5252);
+                });
+            }
+        });
+    }
+    // TEST 13 — JNI Surface Probe
+    private void runJniSurfaceProbe() {
+        tvTest13Result.setText("Liberating Qt Display (sendInfo 16)...");
+        btnTest13.setEnabled(false);
+        AppLogger.log("DiagJNI", "Starting TEST 13 JNI Surface Probe");
+
+        // 1. Release display
+        AdbLocalClient.sendInfo(this, 1000, 16, "", new AdbLocalClient.Callback() {
+            @Override
+            public void onSuccess(String ignored) {
+                runOnUiThread(() -> tvTest13Result.setText("Display released. Probing JNI..."));
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(1000);
+                        com.xdja.containerservice.ContainerService.ensureLoaded();
+                        com.xdja.containerservice.QtDisplayInfo[] arr = com.xdja.containerservice.ContainerService.getQtProjectionDispInfoArray();
+                        com.xdja.containerservice.QtDisplayInfo info = com.xdja.containerservice.ContainerService.getQtProjectionDispInfo(0);
+
+                        StringBuilder res = new StringBuilder();
+                        res.append("JNI LOAD: ").append(com.xdja.containerservice.ContainerService.isLoaded).append("\n");
+                        if (info != null) {
+                            res.append("✅ SUCCESS Qt(0):\n").append(info.toString()).append("\n");
+                        } else {
+                            res.append("❌ FAIL Qt(0) returned null\n");
+                        }
+                        if (arr != null) {
+                            res.append("✅ SUCCESS Array Size: ").append(arr.length).append("\n");
+                            for (int i = 0; i < arr.length; i++) {
+                                res.append(" - [").append(i).append("]: ").append(arr[i]).append("\n");
+                            }
+                        } else {
+                            res.append("❌ FAIL Array returned null\n");
+                        }
+
+                        AppLogger.log("DiagJNI", res.toString());
+                        runOnUiThread(() -> {
+                            tvTest13Result.setText(res.toString());
+                            btnTest13.setEnabled(true);
+                        });
+                    } catch (Exception e) {
+                        AppLogger.e("DiagJNI", "Exception", e);
+                        runOnUiThread(() -> {
+                            tvTest13Result.setText("FATAL: " + e.getMessage());
+                            btnTest13.setEnabled(true);
+                        });
+                    }
+                }).start();
+            }
+
+            @Override
+            public void onError(String e) {
+                runOnUiThread(() -> {
+                    tvTest13Result.setText("Failed to send 16: " + e);
+                    btnTest13.setEnabled(true);
                 });
             }
         });

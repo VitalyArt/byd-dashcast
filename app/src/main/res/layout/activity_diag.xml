@@ -561,6 +561,69 @@
                 android:backgroundTint="#1565C0"
                 android:layout_marginStart="4dp"/>
 
+            <!-- TEST 13 JNI -->
+
+            <TextView
+
+                android:layout_width="match_parent"
+
+                android:layout_height="wrap_content"
+
+                android:text="TEST 13 — Vol de Surface JNI"
+
+                android:textStyle="bold"
+
+                android:layout_marginTop="16dp"
+
+                android:textColor="#333"/>
+
+            <TextView
+
+                android:layout_width="match_parent"
+
+                android:layout_height="wrap_content"
+
+                android:text="Force BYD QtSurface native pointer extraction via libxdjacontainerservice_jni.so"
+
+                android:textSize="12sp"
+
+                android:layout_marginBottom="8dp"
+
+                android:textColor="#666"/>
+
+            <TextView
+
+                android:id="@+id/tv_test_13_result"
+
+                android:layout_width="match_parent"
+
+                android:layout_height="wrap_content"
+
+                android:text="--"
+
+                android:textSize="12sp"
+
+                android:fontFamily="monospace"
+
+                android:background="#f5f5f5"
+
+                android:padding="8dp"
+
+                android:layout_marginBottom="8dp"/>
+
+            <Button
+
+                android:id="@+id/btn_test_13"
+
+                android:layout_width="match_parent"
+
+                android:layout_height="wrap_content"
+
+                android:text="Execute getQtProjectionDispInfo(0)"
+
+                android:backgroundTint="#FF9800"/>
+
+
         </LinearLayout>
 
 </LinearLayout>
