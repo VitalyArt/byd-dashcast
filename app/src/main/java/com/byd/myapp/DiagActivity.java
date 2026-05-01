@@ -784,113 +784,102 @@ public class DiagActivity extends AppCompatActivity {
     }
 
     private void startReSniffer() {
-        // Toujours tuer les processus précédents avant de relancer
         killReSnifferProcesses();
 
         mReSnifferFile = buildReSnifferFile();
-        final String p = mReSnifferFile.getAbsolutePath();
+        final String p  = mReSnifferFile.getAbsolutePath();
+        final String pf = "/data/local/tmp/" + RE_SNIFFER_PIDS;
         AppLogger.i("RESniffer", "Starting RE Sniffer → " + p);
 
-        // ── Header initial (synchrone) ─────────────────────────────────────────
+        runOnUiThread(() -> {
+            tvReSnifferStatus.setText("Initialisation...");
+            tvReSnifferStatus.setTextColor(0xFFFFAB40);
+        });
+
+        // ── Étape 1 : header rapide (synchrone via executeShellWithResult) ─────
+        // IMPORTANT : on utilise executeShellWithResult pour s'assurer que le fichier
+        // existe et que le tag est posé AVANT de lancer les processus background.
+        // On évite service list / dumpsys window / dumps broadcasts → trop lents.
         String headerCmd =
             "logcat -c 2>/dev/null"
-            + " && touch /data/local/tmp/" + RE_SNIFFER_TAG
-            + " && echo '============================================' > " + p
-            + " && echo '=== BYD REVERSE ENGINEERING SNIFFER ===' >> " + p
-            + " && echo '============================================' >> " + p
-            + " && date >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- DEVICE ---' >> " + p
-            + " && getprop ro.product.model >> " + p
-            + " && getprop ro.build.fingerprint >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- PROCESSUS SYSTEME (snapshot initial) ---' >> " + p
-            + " && ps -A >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- SERVICES (service list) ---' >> " + p
-            + " && service list >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- DISPLAYS ---' >> " + p
-            + " && dumpsys display 2>/dev/null >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- WINDOWS ---' >> " + p
-            + " && dumpsys window 2>/dev/null >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- SURFACEFLINGER ---' >> " + p
-            + " && dumpsys SurfaceFlinger 2>/dev/null >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- ACTIVITY MANAGER (broadcasts history) ---' >> " + p
-            + " && dumpsys activity broadcasts history 2>/dev/null >> " + p
-            + " && echo '' >> " + p
-            + " && echo '--- SNIFFER TEMPS REEL DEMARRE ---' >> " + p;
+            + " ; touch /data/local/tmp/" + RE_SNIFFER_TAG
+            + " ; echo === BYD RE SNIFFER === > " + p
+            + " ; date >> " + p
+            + " ; getprop ro.product.model >> " + p
+            + " ; getprop ro.build.fingerprint >> " + p
+            + " ; echo --- DISPLAYS INITIAL --- >> " + p
+            + " ; dumpsys display 2>/dev/null >> " + p
+            + " ; echo --- SURFACEFLINGER INITIAL --- >> " + p
+            + " ; dumpsys SurfaceFlinger 2>/dev/null >> " + p
+            + " ; echo --- PROCESSUS INITIAL --- >> " + p
+            + " ; ps -A 2>/dev/null >> " + p
+            + " ; echo === LIVE CAPTURE START === >> " + p;
 
-        // ── Logcat temps réel — TOUT intercepter ──────────────────────────────
-        // On capture tout (pas de filtre *:S) puis on filtre sur les tags utiles.
-        // On garde aussi DEBUG (crash natif) et art (classloader).
-        String logcatCmd =
-            "logcat -v threadtime"
-            + " ActivityManager:V WindowManager:V SurfaceFlinger:V"
-            + " DisplayManagerService:V DisplayManagerGlobal:V"
-            + " AutoContainer:V MirrorDaemon:V DashCastDaemon:V"
-            + " byd:V xdja:V cluster:V dilink:V qt:V container:V"
-            + " BYD_*:V Qt*:V DashCast*:V"
-            + " Binder:V ServiceManager:V"
-            + " am_*:V wm_*:V"
-            + " DEBUG:E art:W dalvikvm:W"
-            + " *:S"
-            + " >> " + p + " 2>&1";
+        AdbLocalClient.executeShellWithResult(this, headerCmd, new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String out) {
+                // ── Étape 2 : processus background avec setsid ────────────────
+                // setsid crée une nouvelle session → survit à la fermeture de la session ADB.
+                // nohup seul ne suffit pas : adbd envoie SIGHUP au groupe de processus.
+                // On capture TOUT le logcat (pas de filtre tag) → rien n'est manqué.
+                // Les PIDs sont sauvés avec $! pour un kill propre.
 
-        // ── Snapshots complets toutes les 10s ─────────────────────────────────
-        String snapshotCmd =
-            "while [ -f /data/local/tmp/" + RE_SNIFFER_TAG + " ]; do sleep 10;"
-            + " echo '' >> " + p + ";"
-            + " echo '=== SNAPSHOT '$(date +%H:%M:%S)' ===' >> " + p + ";"
-            + " dumpsys display 2>/dev/null | grep -E 'mDisplayId|mName|mState|fission|virtual|cluster|Qt|layerStack' >> " + p + ";"
-            + " dumpsys SurfaceFlinger 2>/dev/null | grep -iE 'display|fission|layer|cluster|mirror|virtual|qt' | head -30 >> " + p + ";"
-            + " dumpsys window 2>/dev/null | grep -iE 'mDisplayId|Window \\{|mSurface|fission|cluster|byd|qt|container' | head -50 >> " + p + ";"
-            + " dumpsys activity broadcasts history 2>/dev/null | tail -30 >> " + p + ";"
-            + " ps -A 2>/dev/null | grep -iE 'byd|xdja|daemon|mirror|dilink|qt|cluster|app_process' >> " + p + ";"
-            + " done";
+                // Snapshot toutes les 10s : pas de simples-quotes dans le corps
+                // (la commande est wrappée dans sh -c '...' — les ' casseraient l'arg)
+                String snapLoop =
+                    "while [ -f /data/local/tmp/" + RE_SNIFFER_TAG + " ]; do sleep 10;"
+                    + " echo >> " + p + ";"
+                    + " printf \"=== SNAP %s ===\\n\" $(date +%H:%M:%S) >> " + p + ";"
+                    + " dumpsys display 2>/dev/null"
+                    + "   | grep -E \"mDisplayId|mName|mState|fission|virtual|cluster|layerStack\""
+                    + "   >> " + p + ";"
+                    + " dumpsys SurfaceFlinger 2>/dev/null"
+                    + "   | grep -iE \"display|fission|layer|cluster|mirror|virtual|qt\""
+                    + "   | head -30 >> " + p + ";"
+                    + " ps -A 2>/dev/null"
+                    + "   | grep -iE \"byd|xdja|daemon|dilink|qt|cluster|app_process\""
+                    + "   >> " + p + ";"
+                    + " done";
 
-        // ── Broadcast events (buffer events logcat) ────────────────────────────
-        String eventsCmd =
-            "logcat -b events -v time >> " + p + " 2>/dev/null";
+                // Reset PID file, lance 3 processus setsid, sauve $! après chaque &
+                String bgCmd =
+                    "echo > " + pf
+                    + " ; setsid sh -c 'logcat -v threadtime >> " + p + " 2>&1'"
+                    + "   & echo $! >> " + pf
+                    + " ; setsid sh -c '" + snapLoop + "'"
+                    + "   & echo $! >> " + pf
+                    + " ; setsid sh -c 'logcat -b events -v time >> " + p + " 2>&1'"
+                    + "   & echo $! >> " + pf;
 
-        // ── Lance les 3 processus et stocke leurs PIDs ────────────────────────
-        // On wrappe chaque processus dans un sh qui écrit son PID dans le fichier pids
-        // puis exécute la commande. De cette façon, stopReSniffer peut les kill proprement.
-        String pidFile = "/data/local/tmp/" + RE_SNIFFER_PIDS;
-        String fullCmd = headerCmd
-                + " && echo '' > " + pidFile  // reset pids file
-                + " && nohup sh -c 'echo $$ >> " + pidFile + "; " + logcatCmd + "' &"
-                + " nohup sh -c 'echo $$ >> " + pidFile + "; " + snapshotCmd + "' &"
-                + " nohup sh -c 'echo $$ >> " + pidFile + "; " + eventsCmd + "' &";
+                AdbLocalClient.executeShell(DiagActivity.this, bgCmd);
 
-        AdbLocalClient.executeShell(this, fullCmd);
-
-        runOnUiThread(() -> {
-            tvReSnifferStatus.setText("ACTIF → " + mReSnifferFile.getName());
-            tvReSnifferStatus.setTextColor(0xFF69F0AE);
-            android.widget.Toast.makeText(this,
-                    "Sniffer démarré : " + mReSnifferFile.getName(),
-                    android.widget.Toast.LENGTH_LONG).show();
+                runOnUiThread(() -> {
+                    tvReSnifferStatus.setText("ACTIF → " + mReSnifferFile.getName());
+                    tvReSnifferStatus.setTextColor(0xFF69F0AE);
+                    android.widget.Toast.makeText(DiagActivity.this,
+                            "Sniffer démarré : " + mReSnifferFile.getName(),
+                            android.widget.Toast.LENGTH_LONG).show();
+                });
+            }
+            @Override public void onError(String err) {
+                runOnUiThread(() -> {
+                    tvReSnifferStatus.setText("❌ Échec init: " + err);
+                    tvReSnifferStatus.setTextColor(0xFFFF5252);
+                });
+            }
         });
     }
 
-    /** Tue proprement tous les processus du sniffer (logcat + snapshot loop + events). */
+    /** Tue proprement tous les processus du sniffer via PID file + pkill fallback. */
     private void killReSnifferProcesses() {
         String pidFile = "/data/local/tmp/" + RE_SNIFFER_PIDS;
-        // 1. Supprimer le flag → arrête le while loop des snapshots
-        // 2. Lire le fichier PIDs et tuer chaque processus
-        // 3. Tuer aussi par pattern en fallback (au cas où le PID file est corrompu)
         String killCmd =
             "rm -f /data/local/tmp/" + RE_SNIFFER_TAG
             + " ; if [ -f " + pidFile + " ]; then"
-            + "   while read pid; do kill -9 \"$pid\" 2>/dev/null; done < " + pidFile + ";"
+            + "   while IFS= read -r pid; do"
+            + "     [ -n \"$pid\" ] && kill -9 \"$pid\" 2>/dev/null; done < " + pidFile + ";"
             + "   rm -f " + pidFile + ";"
             + " fi"
-            // Fallback : kill les processus logcat qui écrivent dans nos fichiers RE Sniffer
-            + " ; pkill -f '" + RE_SNIFFER_PREFIX + "' 2>/dev/null || true";
+            + " ; pkill -f " + RE_SNIFFER_PREFIX + " 2>/dev/null; true";
         AdbLocalClient.executeShell(this, killCmd);
     }
 
