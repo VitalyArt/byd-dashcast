@@ -708,5 +708,40 @@
                 android:backgroundTint="#03A9F4"/>
         </LinearLayout>
 
+
+        <!-- TEST 16 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="#f5fdf5"
+            android:layout_marginBottom="16dp"
+            android:elevation="2dp">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="TEST 16 - Shell Daemon VirtualDisplay"
+                android:textStyle="bold"
+                android:textColor="#333"/>
+            <TextView
+                android:id="@+id/tv_daemon_vd_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:background="#eef"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+            <Button
+                android:id="@+id/btn_daemon_vd_test"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Creer VirtualDisplay via Daemon ADB"
+                android:backgroundTint="#4CAF50"/>
+        </LinearLayout>
+
 </LinearLayout>
+
 </ScrollView>

@@ -80,6 +80,10 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnDumpsysWindows;
     private TextView tvDumpsysResult;
 
+    // TEST 16
+    private Button btnDaemonVdTest;
+    private TextView tvDaemonVdResult;
+
     @Override
     protected void attachBaseContext(android.content.Context base) {
         super.attachBaseContext(LocaleHelper.applyLocale(base));
@@ -145,6 +149,10 @@ public class DiagActivity extends AppCompatActivity {
         btnDumpsysWindows = (Button) findViewById(R.id.btn_dumpsys_windows);
         tvDumpsysResult   = (TextView) findViewById(R.id.tv_dumpsys_result);
 
+        // TEST 16
+        btnDaemonVdTest = (Button) findViewById(R.id.btn_daemon_vd_test);
+        tvDaemonVdResult = (TextView) findViewById(R.id.tv_daemon_vd_result);
+
         btnTestDaemon.setOnClickListener(v -> testLaunchFreedomDaemon());
         btnScanDaemon.setOnClickListener(v -> scanDaemon());
         btnKillDaemon.setOnClickListener(v -> killDaemon());
@@ -165,6 +173,7 @@ public class DiagActivity extends AppCompatActivity {
         btnTest13.setOnClickListener(v -> runJniSurfaceProbe());
         btnVdTest.setOnClickListener(v -> testVirtualDisplayAPI());
         btnDumpsysWindows.setOnClickListener(v -> runDumpsysWindows());
+        btnDaemonVdTest.setOnClickListener(v -> runDaemonVdTest());
 
         // TEST 1 — Local ADB connection
         btnAdbShare.setOnClickListener(new View.OnClickListener() {
@@ -1041,5 +1050,33 @@ public class DiagActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void runDaemonVdTest() {
+        tvDaemonVdResult.setText("Lancement du daemon via adb local...");
+        btnDaemonVdTest.setEnabled(false);
+        try {
+            String apkPath = getPackageManager().getApplicationInfo(getPackageName(), 0).sourceDir;
+            String cmd = "app_process -Djava.class.path=" + apkPath + " /system/bin com.byd.myapp.dashboard.DashCastDaemon";
+            AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
+                @Override
+                public void onSuccess(final String report) {
+                    runOnUiThread(() -> {
+                        tvDaemonVdResult.setText("DAEMON OUTPUT: " + report);
+                        btnDaemonVdTest.setEnabled(true);
+                    });
+                }
+                @Override
+                public void onError(final String error) {
+                    runOnUiThread(() -> {
+                        tvDaemonVdResult.setText("ERREUR: " + error);
+                        btnDaemonVdTest.setEnabled(true);
+                    });
+                }
+            });
+        } catch (Exception e) {
+            tvDaemonVdResult.setText("Erreur APK path: " + e.getMessage());
+            btnDaemonVdTest.setEnabled(true);
+        }
     }
 }
