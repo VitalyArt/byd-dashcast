@@ -69,7 +69,6 @@ public class DiagActivity extends AppCompatActivity {
     private Button        btnFissionLaunch;
     private TextView      tvFissionResult;
     private int           mFissionDisplayId = -1;
-    private VirtualDisplay mClusterVirtualDisplay = null;
 
     private Button   btnReSnifferStart;
     private Button   btnReSnifferStop;

@@ -1375,7 +1375,9 @@ public class AdbLocalClient {
                                 li = new android.content.Intent();
                                 li.setComponent(new android.content.ComponentName(targetPackage, pi.activities[0].name));
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) {
+                            AppLogger.d(TAG, "getPackageInfo fallback failed for " + targetPackage + ": " + e.getMessage());
+                        }
                     }
                     if (li == null || li.getComponent() == null) {
                         callback.onError("No activity found for " + targetPackage);

@@ -186,7 +186,9 @@ public class ClusterInputForwarder {
             if (mSetDisplayIdMethod != null) {
                 try {
                     mSetDisplayIdMethod.invoke(ev, mClusterDisplayId);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    AppLogger.d(TAG, "setDisplayId via reflection failed: " + e.getMessage());
+                }
             }
             mInjectMethod.invoke(mInputManager, ev, INJECT_INPUT_EVENT_MODE_ASYNC);
             ev.recycle();

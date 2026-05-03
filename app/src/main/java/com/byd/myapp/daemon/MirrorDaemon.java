@@ -393,7 +393,9 @@ public class MirrorDaemon {
                     Method setWm = android.app.ActivityOptions.class
                             .getMethod("setLaunchWindowingMode", int.class);
                     setWm.invoke(opts, 5); // FREEFORM
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    Log.d(TAG, "setLaunchWindowingMode not available on this ROM: " + e.getMessage());
+                }
             }
             c.startActivity(launchIntent, opts.toBundle());
             Log.i(TAG, "Launched ✓ " + pkg + "/" + cls + " display=" + displayId);
