@@ -123,8 +123,6 @@
     <string name="diag_size_full_btn">📊 Volldiagnose (~8 s)</string>
     <string name="diag_test3_hint_text">Schaltfläche drücken (ADB muss autorisiert sein — zuerst TEST 1 ausführen).</string>
     <string name="diag_share_result3_btn">TEST 3-Ergebnis teilen</string>
-    <string name="diag_test4_title">TEST 4 — BootReceiver Freedom (headless)</string>
-    <string name="diag_test4_desc">Sendet BOOT_COMPLETED direkt an Freedoms BootReceiver (com.xdja.clusterdemo) via ADB, ohne dessen UI zu öffnen. Wenn dadurch ein Cluster-VirtualDisplay erstellt wird → Freedom kann headless gestartet werden.</string>
     <string name="diag_launch_test4_btn">▶ TEST 4 starten — Broadcast BootReceiver</string>
     <string name="diag_result_test4_hint">(TEST 4-Ergebnis)</string>
     <string name="diag_share_result4_btn">TEST 4-Ergebnis teilen</string>
@@ -146,7 +144,6 @@
     <string name="diag_stop_sniffer_btn">☠ Alle Sniffer-Prozesse beenden</string>
     <string name="diag_export_sniffer_btn">📤 Sniffer-Bericht exportieren (Telegram…)</string>
     <string name="diag_clean_sniffer_btn">🗑 Alle BYD_Sniffer_Dump*.txt löschen</string>
-    <string name="diag_test_daemon_btn">🧪 Freedom IPC testen (experimentell)</string>
 
     <!-- DiagActivity — Java status / feedback -->
     <string name="diag_adb_connecting">Verbindung zu localhost:5555…\n⏳ Das Popup erscheint auf diesem Bildschirm — ERLAUBEN drücken.</string>
@@ -158,7 +155,6 @@
     <string name="diag_size_sending">⏳ sendInfo(1000, %1$d) → %2$s…</string>
     <string name="diag_size_restoring">⏳ Standardgröße wird wiederhergestellt (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Cluster-Dimensionsdiagnose…\nVersuch cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 Sekunden)</string>
-    <string name="diag_boot_receiver_running">⏳ Freedom beenden, dann BOOT_COMPLETED → BootReceiver senden…\n5 s auf VirtualDisplay-Erstellung warten…</string>
     <string name="diag_sniffer_killing">Sniffer wird beendet…</string>
     <string name="diag_scanning">Wird gescannt…</string>
     <string name="diag_daemon_killing">kill -9 wird gesendet…</string>

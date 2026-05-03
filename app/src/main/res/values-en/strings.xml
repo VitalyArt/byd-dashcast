@@ -122,8 +122,6 @@
     <string name="diag_size_full_btn">📊 Full diagnostic (~8s)</string>
     <string name="diag_test3_hint_text">Press a button (ADB must be authorized — run TEST 1 first).</string>
     <string name="diag_share_result3_btn">Share TEST 3 result</string>
-    <string name="diag_test4_title">TEST 4 — BootReceiver Freedom (headless)</string>
-    <string name="diag_test4_desc">Sends BOOT_COMPLETED directly to Freedom\'s BootReceiver (com.xdja.clusterdemo) via ADB, without opening its UI. If it creates the cluster VirtualDisplay → Freedom can be launched headless.</string>
     <string name="diag_launch_test4_btn">▶ Launch TEST 4 — Broadcast BootReceiver</string>
     <string name="diag_result_test4_hint">(TEST 4 result)</string>
     <string name="diag_share_result4_btn">Share TEST 4 result</string>
@@ -145,7 +143,6 @@
     <string name="diag_stop_sniffer_btn">☠ Kill all Sniffer processes</string>
     <string name="diag_export_sniffer_btn">📤 Export Sniffer report (Telegram…)</string>
     <string name="diag_clean_sniffer_btn">🗑 Delete all BYD_Sniffer_Dump*.txt</string>
-    <string name="diag_test_daemon_btn">🧪 Test Freedom IPC (experimental)</string>
 
     <!-- DiagActivity — Java status / feedback -->
     <string name="diag_adb_connecting">Connecting to localhost:5555…\n⏳ The popup will appear on this screen — press ALLOW.</string>
@@ -157,7 +154,6 @@
     <string name="diag_size_sending">⏳ sendInfo(1000, %1$d) → %2$s…</string>
     <string name="diag_size_restoring">⏳ Restoring default size (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Cluster dimensions diagnostic…\nTrying cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 seconds)</string>
-    <string name="diag_boot_receiver_running">⏳ Force-stop Freedom then broadcast BOOT_COMPLETED → BootReceiver…\nWaiting 5s for VirtualDisplay creation…</string>
     <string name="diag_sniffer_killing">Killing sniffer…</string>
     <string name="diag_scanning">Scanning…</string>
     <string name="diag_daemon_killing">Sending kill -9…</string>

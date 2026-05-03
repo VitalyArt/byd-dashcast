@@ -123,8 +123,6 @@
     <string name="diag_size_full_btn">📊 Diagnosi completa (~8 s)</string>
     <string name="diag_test3_hint_text">Premere un pulsante (ADB deve essere autorizzato — eseguire prima TEST 1).</string>
     <string name="diag_share_result3_btn">Condividi risultato TEST 3</string>
-    <string name="diag_test4_title">TEST 4 — BootReceiver Freedom (headless)</string>
-    <string name="diag_test4_desc">Invia BOOT_COMPLETED direttamente al BootReceiver di Freedom (com.xdja.clusterdemo) via ADB, senza aprirne l\'UI. Se crea un cluster VirtualDisplay → Freedom può essere avviato in headless.</string>
     <string name="diag_launch_test4_btn">▶ Avvia TEST 4 — Broadcast BootReceiver</string>
     <string name="diag_result_test4_hint">(risultato TEST 4)</string>
     <string name="diag_share_result4_btn">Condividi risultato TEST 4</string>
@@ -146,7 +144,6 @@
     <string name="diag_stop_sniffer_btn">☠ Termina tutti i processi Sniffer</string>
     <string name="diag_export_sniffer_btn">📤 Esporta rapporto Sniffer (Telegram…)</string>
     <string name="diag_clean_sniffer_btn">🗑 Elimina tutti BYD_Sniffer_Dump*.txt</string>
-    <string name="diag_test_daemon_btn">🧪 Testa Freedom IPC (sperimentale)</string>
 
     <!-- DiagActivity — Java status / feedback -->
     <string name="diag_adb_connecting">Connessione a localhost:5555…\n⏳ Il popup apparirà su questo schermo — premere CONSENTI.</string>
@@ -158,7 +155,6 @@
     <string name="diag_size_sending">⏳ sendInfo(1000, %1$d) → %2$s…</string>
     <string name="diag_size_restoring">⏳ Ripristino dimensione predefinita (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Diagnostica dimensioni cluster…\nTentativo cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 secondi)</string>
-    <string name="diag_boot_receiver_running">⏳ Arresto Freedom, poi invio BOOT_COMPLETED → BootReceiver…\nAttesa 5 s per creazione VirtualDisplay…</string>
     <string name="diag_sniffer_killing">Arresto Sniffer…</string>
     <string name="diag_scanning">Scansione in corso…</string>
     <string name="diag_daemon_killing">Invio kill -9…</string>

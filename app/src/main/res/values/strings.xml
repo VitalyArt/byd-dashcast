@@ -122,8 +122,6 @@
     <string name="diag_size_full_btn">📊 Diagnostic complet (~8 s)</string>
     <string name="diag_test3_hint_text">Appuyez sur un bouton (ADB doit être autorisé — TEST 1 d\'abord).</string>
     <string name="diag_share_result3_btn">Partager le résultat TEST 3</string>
-    <string name="diag_test4_title">TEST 4 — BootReceiver Freedom (sans UI)</string>
-    <string name="diag_test4_desc">Envoie BOOT_COMPLETED directement au BootReceiver de Freedom (com.xdja.clusterdemo) via ADB, sans ouvrir son UI. Si ça crée le VirtualDisplay cluster → Freedom peut être lancé en headless.</string>
     <string name="diag_launch_test4_btn">▶ Lancer TEST 4 — Broadcast BootReceiver</string>
     <string name="diag_result_test4_hint">(résultat TEST 4)</string>
     <string name="diag_share_result4_btn">Partager le résultat TEST 4</string>
@@ -145,7 +143,6 @@
     <string name="diag_stop_sniffer_btn">☠ Tuer tous les processus Sniffer</string>
     <string name="diag_export_sniffer_btn">📤 Exporter rapport Sniffer (Telegram…)</string>
     <string name="diag_clean_sniffer_btn">🗑 Supprimer tous les BYD_Sniffer_Dump*.txt</string>
-    <string name="diag_test_daemon_btn">🧪 Tester Freedom IPC (expérimental)</string>
 
     <!-- DiagActivity — Java status / feedback -->
     <string name="diag_adb_connecting">Connexion à localhost:5555…\n⏳ Le popup va apparaître sur cet écran — appuyez AUTORISER.</string>
@@ -157,7 +154,6 @@
     <string name="diag_size_sending">⏳ sendInfo(1000, %1$d) → %2$s…</string>
     <string name="diag_size_restoring">⏳ Rétablissement taille défaut (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Diagnostic dimensions cluster…\nEssai cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 secondes)</string>
-    <string name="diag_boot_receiver_running">⏳ Force-stop Freedom puis broadcast BOOT_COMPLETED → BootReceiver…\nAttente 5 s création VirtualDisplay…</string>
     <string name="diag_sniffer_killing">Arrêt sniffer en cours…</string>
     <string name="diag_scanning">Scan en cours…</string>
     <string name="diag_daemon_killing">Envoi kill -9 en cours…</string>
