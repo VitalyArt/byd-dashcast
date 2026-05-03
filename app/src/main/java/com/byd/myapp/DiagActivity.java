@@ -942,28 +942,6 @@ public class DiagActivity extends AppCompatActivity {
         }).start();
     }
 
-    /**
-     * Parse la sortie de "dumpsys display | grep -E 'mDisplayId|mName'"
-     * et retourne le displayId du premier display dont le nom contient nameContains.
-     * Format attendu (l'ID précède toujours le nom) :
-     *   mDisplayId=4
-     *   mName=fission_testVirtualSurface
-     */
-    private int parseDisplayIdByName(String output, String nameContains) {
-        int lastId = -1;
-        for (String line : output.split("\n")) {
-            String t = line.trim();
-            if (t.startsWith("mDisplayId=")) {
-                try {
-                    lastId = Integer.parseInt(t.substring("mDisplayId=".length()).trim());
-                } catch (NumberFormatException ignored) {}
-            } else if (t.startsWith("mName=") && t.contains(nameContains)) {
-                return lastId;
-            }
-        }
-        return -1;
-    }
-
     private void launchOnFissionDisplay() {
         if (mFissionDisplayId == -1) {
             tvFissionResult.setText("❌ Pas de display fission. Lancer d'abord \"Créer Fission Display\".");

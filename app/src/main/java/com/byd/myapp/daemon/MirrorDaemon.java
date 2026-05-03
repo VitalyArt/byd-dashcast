@@ -291,7 +291,9 @@ public class MirrorDaemon {
                 while ((line = br.readLine()) != null) sb.append(line).append('\n');
                 p.waitFor();
                 Log.i(TAG, "setupMirror SF dump :\n" + sb.toString().trim());
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.d(TAG, "SF dump read failed: " + e.getMessage());
+            }
 
             Log.i(TAG, "setupMirror ✓ (Transaction) layerStack=" + layerStack
                     + " src=" + clusterW + "×" + clusterH
@@ -368,40 +370,6 @@ public class MirrorDaemon {
         Intent intent = new Intent(ACTION_DAEMON_READY);
         intent.putExtras(extras);
         context.sendBroadcast(intent);
-    }
-
-    // ── App launch (inherited) ─────────────────────────────────────────────────
-
-    private static void handleLaunch(Context c, Intent intent) {
-        Log.i(TAG, "DAEMON_LAUNCH received");
-        String pkg       = intent.getStringExtra("pkg");
-        String cls       = intent.getStringExtra("cls");
-        int displayId    = intent.getIntExtra("displayId", 0);
-        int bl           = intent.getIntExtra("bounds_l", -1);
-        int bt           = intent.getIntExtra("bounds_t", -1);
-        int br           = intent.getIntExtra("bounds_r", -1);
-        int bb           = intent.getIntExtra("bounds_b", -1);
-        try {
-            Intent launchIntent = new Intent();
-            launchIntent.setComponent(new android.content.ComponentName(pkg, cls));
-            launchIntent.addFlags(0x10008000); // NEW_TASK | CLEAR_TASK
-            android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
-            opts.setLaunchDisplayId(displayId);
-            if (bl >= 0 && br > bl && bb > bt) {
-                opts.setLaunchBounds(new Rect(bl, bt, br, bb));
-                try {
-                    Method setWm = android.app.ActivityOptions.class
-                            .getMethod("setLaunchWindowingMode", int.class);
-                    setWm.invoke(opts, 5); // FREEFORM
-                } catch (Exception e) {
-                    Log.d(TAG, "setLaunchWindowingMode not available on this ROM: " + e.getMessage());
-                }
-            }
-            c.startActivity(launchIntent, opts.toBundle());
-            Log.i(TAG, "Launched ✓ " + pkg + "/" + cls + " display=" + displayId);
-        } catch (Exception e) {
-            Log.e(TAG, "handleLaunch failed: " + pkg, e);
-        }
     }
 
     // ── Hidden API unlock ─────────────────────────────────────────────────────

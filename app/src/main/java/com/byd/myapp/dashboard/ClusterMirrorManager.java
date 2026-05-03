@@ -315,7 +315,7 @@ public class ClusterMirrorManager {
         mPreviewDisplayId = -1;
         mProjScale = 0f;  // Reset: signals "not yet set" to touch mapping
         if (mPreviewVD != null) {
-            try { mPreviewVD.release(); } catch (Exception ignored) {}
+            try { mPreviewVD.release(); } catch (Exception e) { AppLogger.d(TAG, "mPreviewVD.release() failed (already released?): " + e.getMessage()); }
             mPreviewVD = null;
         }
         destroyMirrorToken();
