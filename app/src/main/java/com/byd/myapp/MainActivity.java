@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.hardware.display.DisplayManager;
 import android.view.Display;
 import android.view.MenuItem;
@@ -92,7 +93,6 @@ public class MainActivity extends AppCompatActivity
             if (mDashboardLauncher != null) mDashboardLauncher.setDashboardDisplayId(-1);
             mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
             mMainDisplayPkg      = null;
             clearSplitState();
@@ -402,7 +402,6 @@ public class MainActivity extends AppCompatActivity
             public void run() {
                 updateDashboardStatus(null);
                 btnActivateCluster.setEnabled(true);
-                btnActivateCluster.setEnabled(true);
 
                 // If the panel is visible (app already active), start/reconfigure the mirror
                 if (panelClusterControl.getVisibility() == View.VISIBLE) {
@@ -457,7 +456,6 @@ public class MainActivity extends AppCompatActivity
             public void run() {
                 mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
                 mMainDisplayPkg = null;
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_MAIN_PKG).apply();
@@ -563,7 +561,6 @@ public class MainActivity extends AppCompatActivity
         mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
                 btnActivateCluster.setEnabled(true);
-                btnActivateCluster.setEnabled(true);
         // Force-stop the secondary slot in split mode (prevents it from staying on display 1)
         if (mSecondDashboardPkg != null) {
             AdbLocalClient.forceStopApp(this, mSecondDashboardPkg, null);
@@ -576,7 +573,6 @@ public class MainActivity extends AppCompatActivity
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .edit().putString(PREF_MAIN_PKG, app.packageName).apply();
         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
         showAppList();
         mDashboardLauncher.launchOnMainDisplay(app.packageName);
@@ -603,7 +599,6 @@ public class MainActivity extends AppCompatActivity
                         mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
                 btnActivateCluster.setEnabled(true);
-                btnActivateCluster.setEnabled(true);
                         // Force-stop le slot secondaire en mode split
                         if (mSecondDashboardPkg != null) {
                             AdbLocalClient.forceStopApp(MainActivity.this, mSecondDashboardPkg, null);
@@ -618,7 +613,6 @@ public class MainActivity extends AppCompatActivity
                         }
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
                         showAppList();
                         Toast.makeText(MainActivity.this,
@@ -1035,11 +1029,9 @@ public class MainActivity extends AppCompatActivity
                         mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
                 btnActivateCluster.setEnabled(true);
-                btnActivateCluster.setEnabled(true);
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnRestoreCluster.setEnabled(true);
@@ -1062,6 +1054,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     private void updateDashboardStatus(String appName) {
+        tvDashboardStatus.setTextColor(Color.WHITE);
         if (appName == null) {
             tvDashboardStatus.setText(getString(R.string.status_dashboard_byd));
         } else {
@@ -1091,11 +1084,9 @@ public class MainActivity extends AppCompatActivity
                         mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
                 btnActivateCluster.setEnabled(true);
-                btnActivateCluster.setEnabled(true);
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
                 btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnOriginCluster.setEnabled(true);

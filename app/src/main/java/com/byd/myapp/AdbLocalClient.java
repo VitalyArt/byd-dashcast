@@ -778,16 +778,24 @@ public class AdbLocalClient {
                 try (Dadb dadb = connect(context)) {
                     StringBuilder sb = new StringBuilder();
 
-                    sb.append("── sendInfo(1000, 30) = 12.3\" (ADAS not stretched) ──\n");
+                    // Full confirmed sequence (logcat 03/05/2026, BYD Seal EU):
+                    //   sendInfo(30) → 6s → sendInfo(16) → 6s → sendInfo(35) → VirtualDisplay in ~280ms
+                    sb.append("── sendInfo(1000, 30) = 12.3\" profile ──\n");
                     AdbShellResponse r30 = dadb.shell(
                         "service call AutoContainer 2 i32 1000 i32 30 s16 \"\" 2>&1");
                     sb.append(r30.getAllOutput().trim()).append("\n");
-                    Thread.sleep(1000);
+                    Thread.sleep(6000);
 
-                    sb.append("\n── sendInfo(1000, 16) = Qt standby ──\n");
+                    sb.append("\n── sendInfo(1000, 16) = 全屏投屏开启 Qt standby ──\n");
                     AdbShellResponse r16 = dadb.shell(
                         "service call AutoContainer 2 i32 1000 i32 16 s16 \"\" 2>&1");
                     sb.append(r16.getAllOutput().trim()).append("\n");
+                    Thread.sleep(6000);
+
+                    sb.append("\n── sendInfo(1000, 35) = Di4.0 mode → VirtualDisplay creation ──\n");
+                    AdbShellResponse r35 = dadb.shell(
+                        "service call AutoContainer 2 i32 1000 i32 35 s16 \"\" 2>&1");
+                    sb.append(r35.getAllOutput().trim()).append("\n");
 
                     AppLogger.endTiming(TAG, t0, "activateClusterDisplay finished");
                     callback.onSuccess(sb.toString());

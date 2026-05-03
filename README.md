@@ -87,6 +87,31 @@ app/src/main/java/com/byd/myapp/
 
 ## Core mechanism
 
+### VirtualDisplay cluster creation — CONFIRMED (03/05/2026)
+
+> Full details: [`doc_api/VIRTUALDISPLAY_CREATION_MECHANISM.md`](../doc_api/VIRTUALDISPLAY_CREATION_MECHANISM.md)
+> Source: live logcat captured on BYD Seal EU (DiLink 3.0, API 29)
+
+**The cluster VirtualDisplay does NOT exist at boot.** It is created on demand by the
+following sequence, captured to the millisecond:
+
+```
+sendInfo(1000, 30)                  → switch to 12.3" Qt profile (ADAS workaround)
+sleep 6s
+sendInfo(1000, 16)                  → 全屏投屏开启 — Qt enters projection mode
+sleep 6s
+sendInfo(1000, 35)                  → Di4.0 mode — triggers VirtualDisplay creation
+  │  +132ms  FissionGenerayService (Qt native) handles sendInfo(35)
+  │  +219ms  Qt calls getQtProjectionDispInfoNative() via JNI
+  │  +251ms  Qt returns: name="fission_bg_xdjaVirtualSurface", bufferProducer ≠ null
+  │  +274ms  DisplayManagerService: Display device ADDED
+  └  +278ms  AutoDisplayService.createVirtualDisplay() → id=1, 1920×720, FLAG_PRESENTATION
+```
+
+The VirtualDisplay is ready **~280ms after sendInfo(35)**. It is owned by
+`com.xdja.containerservice` (uid=1000) and has `FLAG_OWN_CONTENT_ONLY`, meaning only its
+owner can write to it. Apps are launched on it via `am start --display 1`.
+
 ### Cluster activation
 
 ```

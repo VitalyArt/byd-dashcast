@@ -233,13 +233,23 @@
                 android:background="#E5E9F0"
                 android:padding="8dp"
                 android:layout_marginBottom="8dp"/>
-            <Button
-                android:id="@+id/btn_test_13"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Execute JNI Surface Probe"
-                android:backgroundTint="#434C5E"
-                android:layout_marginBottom="16dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="16dp">
+                <Button
+                    android:id="@+id/btn_test_13"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="JNI Probe"
+                    android:backgroundTint="#434C5E"
+                    android:layout_marginEnd="4dp"/>
+                <Button
+                    android:id="@+id/btn_jni_start_probe"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="Start + JNI Probe"
+                    android:backgroundTint="#5E81AC"/>
+            </LinearLayout>
 
             <!-- Dump SF Mirror -->
             <TextView
@@ -301,6 +311,65 @@
                     android:layout_height="wrap_content"
                     android:text="STOP"
                     android:backgroundTint="#BF616A"/>
+            </LinearLayout>
+
+            <!-- ═══ PIPELINE FISSION (création VirtualDisplay cluster) ═══ -->
+            <View android:layout_width="match_parent" android:layout_height="1dp"
+                android:background="#D8DEE9" android:layout_marginVertical="12dp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Pipeline Fission (création VirtualDisplay cluster)"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#3B4252"
+                android:layout_marginBottom="4dp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Séquence complète : sendInfo(30)+sendInfo(16) → Qt enregistre sa Surface → am startservice AutoDisplayService → updateDisplay() → createVirtualDisplay(fission_testVirtualSurface). Puis lance DashBoard sur ce display."
+                android:textSize="11sp"
+                android:textColor="#4C566A"
+                android:layout_marginBottom="8dp"/>
+            <TextView
+                android:id="@+id/tv_fission_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:background="#E5E9F0"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <Button
+                    android:id="@+id/btn_fission_via_binder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="☕ sendInfo Java Direct (v0.1.21)"
+                    android:backgroundTint="#BF616A"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginBottom="4dp"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <Button
+                    android:id="@+id/btn_fission_pipeline"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="🚀 Créer Fission Display"
+                    android:backgroundTint="#5E81AC"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginRight="4dp"/>
+                <Button
+                    android:id="@+id/btn_fission_launch"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="▶ Lancer Dashboard"
+                    android:backgroundTint="#A3BE8C"
+                    android:textColor="#FFFFFF"
+                    android:enabled="false"/>
             </LinearLayout>
         </LinearLayout>
 

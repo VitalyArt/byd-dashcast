@@ -1,6 +1,9 @@
 package com.byd.myapp;
 
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.Parcel;
+import android.view.Surface;
 import androidx.appcompat.app.AppCompatActivity;
 import android.view.View;
 import android.widget.Button;
@@ -14,7 +17,7 @@ import android.hardware.display.VirtualDisplay;
  * DiagActivity — Diagnostic tools and configuration.
  *
  * TEST 1 — Local ADB connection (prerequisite, to run once)
- * TEST 2 — Cluster restore (sendInfo 30→16→18→0)
+ * TEST 2 — Cluster restore (sendInfo 30→sleep6s→16→sleep6s→35)
  * TEST 3 — Cluster display size (cmd 29 / 30 / 31)
  */
 public class DiagActivity extends AppCompatActivity {
@@ -44,6 +47,7 @@ public class DiagActivity extends AppCompatActivity {
 
     // JNI Qt Surface Probe
     private Button   btnTest13;
+    private Button   btnJniStartProbe;
     private TextView tvTest13Result;
 
     // Dumpsys Windows
@@ -59,7 +63,14 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnAutoDisplayStop;
     private TextView tvAutoDisplayResult;
 
-    // [5] Sniffer RE
+    // [5] Fission via IBinder direct (mécanisme Freedom)
+    private Button        btnFissionViaBinder;
+    private Button        btnFissionPipeline;
+    private Button        btnFissionLaunch;
+    private TextView      tvFissionResult;
+    private int           mFissionDisplayId = -1;
+    private VirtualDisplay mClusterVirtualDisplay = null;
+
     private Button   btnReSnifferStart;
     private Button   btnReSnifferStop;
     private Button   btnReSnifferSnapshot;
@@ -103,10 +114,17 @@ public class DiagActivity extends AppCompatActivity {
         btnAutoDisplayStart  = (Button)   findViewById(R.id.btn_auto_display_start);
         btnAutoDisplayStop   = (Button)   findViewById(R.id.btn_auto_display_stop);
         tvAutoDisplayResult  = (TextView) findViewById(R.id.tv_auto_display_result);
+
+        btnFissionViaBinder = (Button)   findViewById(R.id.btn_fission_via_binder);
+        btnFissionPipeline  = (Button)   findViewById(R.id.btn_fission_pipeline);
+        btnFissionLaunch    = (Button)   findViewById(R.id.btn_fission_launch);
+        tvFissionResult     = (TextView) findViewById(R.id.tv_fission_result);
+        tvFissionResult.setTag("Fission Pipeline");
         tvAutoDisplayResult.setTag("AutoDisplayService");
 
-        // TEST 13
+        // JNI Qt Surface Probe
         btnTest13      = (Button)   findViewById(R.id.btn_test_13);
+        btnJniStartProbe = (Button) findViewById(R.id.btn_jni_start_probe);
         tvTest13Result = (TextView) findViewById(R.id.tv_test_13_result);
         tvTest13Result.setTag("JNI Qt Surface Probe");
 
@@ -139,7 +157,12 @@ public class DiagActivity extends AppCompatActivity {
         btnAutoDisplayStart.setOnClickListener(v -> startAutoDisplayService());
         btnAutoDisplayStop .setOnClickListener(v -> stopAutoDisplayService());
 
+        btnFissionViaBinder.setOnClickListener(v -> runFissionViaBinder());
+        btnFissionPipeline.setOnClickListener(v -> runFissionPipeline());
+        btnFissionLaunch  .setOnClickListener(v -> launchOnFissionDisplay());
+
         btnTest13.setOnClickListener(v -> runJniSurfaceProbe());
+        btnJniStartProbe.setOnClickListener(v -> runStartAndProbe());
         btnDumpsysWindows.setOnClickListener(v -> runDumpsysWindows());
         btnDaemonVdTest.setOnClickListener(v -> runDaemonVdTest());
 
@@ -474,9 +497,6 @@ public class DiagActivity extends AppCompatActivity {
 
     // TEST 13 — JNI Surface Probe
     private void runJniSurfaceProbe() {
-        tvTest13Result.setText("Liberating Qt Display (sendInfo 16)...");
-        btnTest13.setEnabled(false);
-        AppLogger.log("DiagJNI", "Starting TEST 13 JNI Surface Probe");
 
         // 1. Release display
         AdbLocalClient.sendInfo(this, 1000, 16, "", new AdbLocalClient.Callback() {
@@ -529,6 +549,91 @@ public class DiagActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // Start containerservice + JNI Probe (combiné)
+    // -------------------------------------------------------------------------
+    // Exécute une commande shell et retourne le résultat (bloquant, max 5s)
+    private String shellSync(String cmd) {
+        String[] out = {""};
+        java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+        AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String r) { out[0] = r.trim(); l.countDown(); }
+            @Override public void onError(String e)   { out[0] = "ERR:" + e; l.countDown(); }
+        });
+        try { l.await(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        return out[0];
+    }
+
+    private void runStartAndProbe() {
+        tvTest13Result.setText("Diagnostic en cours...");
+        btnJniStartProbe.setEnabled(false);
+        btnTest13.setEnabled(false);
+
+        new Thread(() -> {
+            StringBuilder res = new StringBuilder();
+
+            // 1. Vérifier si Qt / containerservice tournent AVANT de démarrer
+            String psXdja = shellSync("ps -A | grep xdja");
+            String psQt   = shellSync("ps -A | grep -i 'qt\\|dilink\\|mecanum'");
+            res.append("── Processus avant start ──\n");
+            res.append("containerservice: ").append(psXdja.isEmpty() ? "❌ absent" : "✅ " + psXdja.replace("\n", " | ")).append("\n");
+            res.append("Qt/dilink: ").append(psQt.isEmpty() ? "❌ absent" : "✅ " + psQt.replace("\n", " | ")).append("\n\n");
+
+            // 2. Displays actifs avant
+            String dispBefore = shellSync("dumpsys display | grep -E 'mDisplayId|mName|fission|remote_dash'");
+            res.append("── Displays avant start ──\n").append(dispBefore.isEmpty() ? "(aucun fission/remote_dashboard)" : dispBefore).append("\n\n");
+
+            runOnUiThread(() -> tvTest13Result.setText(res.toString()));
+
+            // 3. Démarrer AutoDisplayService
+            String startResult = shellSync("am startservice com.xdja.containerservice/.AutoDisplayService");
+            res.append("── am startservice ──\n").append(startResult).append("\n\n");
+            runOnUiThread(() -> tvTest13Result.setText(res.toString()));
+
+            try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
+            // 4. Vérifier les displays APRÈS
+            String dispAfter = shellSync("dumpsys display | grep -E 'mDisplayId|mName|fission|remote_dash'");
+            res.append("── Displays après 2s ──\n").append(dispAfter.isEmpty() ? "❌ toujours aucun fission/remote_dashboard\n→ Qt n'a pas enregistré sa Surface (JNI null)" : "✅ " + dispAfter).append("\n\n");
+
+            // 5. JNI probe
+            com.xdja.containerservice.ContainerService.ensureLoaded();
+            com.xdja.containerservice.QtDisplayInfo[] arr = com.xdja.containerservice.ContainerService.getQtProjectionDispInfoArray();
+            com.xdja.containerservice.QtDisplayInfo info  = com.xdja.containerservice.ContainerService.getQtProjectionDispInfo(0);
+
+            res.append("── JNI probe ──\n");
+            res.append("JNI chargé: ").append(com.xdja.containerservice.ContainerService.isLoaded).append("\n");
+            if (info != null) {
+                res.append("✅ Qt(0): ").append(info.toString()).append("\n");
+            } else {
+                res.append("❌ Qt(0) = null\n");
+                if (psXdja.isEmpty()) {
+                    res.append("→ CAUSE PROBABLE: containerservice n'était pas lancé\n");
+                } else if (psQt.isEmpty()) {
+                    res.append("→ CAUSE PROBABLE: Qt/Dilink5 n'est pas actif, Surface non enregistrée\n");
+                } else {
+                    res.append("→ Qt tourne mais n'a pas encore enregistré sa Surface\n");
+                    res.append("  (Surface enregistrée dans le process Qt, pas accessible cross-process)\n");
+                }
+            }
+            if (arr != null) {
+                res.append("✅ Array[").append(arr.length).append("]\n");
+                for (int i = 0; i < arr.length; i++) {
+                    res.append("  [").append(i).append("]: ").append(arr[i]).append("\n");
+                }
+            } else {
+                res.append("❌ Array = null\n");
+            }
+
+            AppLogger.log("DiagJNI", res.toString());
+            runOnUiThread(() -> {
+                tvTest13Result.setText(res.toString());
+                btnJniStartProbe.setEnabled(true);
+                btnTest13.setEnabled(true);
+            });
+        }).start();
     }
 
     // -------------------------------------------------------------------------
@@ -599,6 +704,293 @@ public class DiagActivity extends AppCompatActivity {
     }
 
     // =========================================================================
+    // FISSION VIA IBINDER DIRECT — Mécanisme Freedom (com.byd.windowmanager)
+    // =========================================================================
+    // [OBSOLÈTE v0.1.20] — Le broadcast START_CLUSTER_MIRROR n'est pas reçu par Qt.
+    // Le flux réel : ClusterDemoProcess (process séparé) obtient la Surface Qt,
+    // puis broadcaste ACTION_cluster_demo_process_started → Freedom reçoit l'IBinder.
+    //
+    // [v0.1.21 — NOUVEAU TEST] : sendInfo via AutoContainerManager Java direct
+    // Le log montre que sendInfo via shell → callingUid=2000, Qt refuse le JNI.
+    // Via AutoContainerManager.sendInfo() Java → callingUid = uid de notre app.
+    // =========================================================================
+
+    private void runFissionViaBinder() {
+        if (tvFissionResult == null) return;
+        tvFissionResult.setText("sendInfo Java direct...");
+        btnFissionViaBinder.setEnabled(false);
+        btnFissionLaunch.setEnabled(false);
+        mFissionDisplayId = -1;
+
+        new Thread(() -> {
+            final StringBuilder res = new StringBuilder();
+
+            // ── Étape 1 : sendInfo via AutoContainerManager Java (pas shell) ──
+            // LOG montre : shell → callingUid=2000, Qt refuse JNI.
+            // Java direct → callingUid = notre uid app → Qt devrait accepter.
+            res.append("── Étape 1 : AutoContainerManager Java direct ──\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+            try {
+                Object acm = getSystemService("auto_container");
+                if (acm == null) {
+                    acm = getSystemService("Auto_container");
+                }
+                if (acm == null) {
+                    // Fallback via reflection sur AutoContainerManager.getAutoContainerManager()
+                    Class<?> cls = Class.forName("android.os.AutoContainerManager");
+                    java.lang.reflect.Method initM = cls.getMethod("init", android.content.Context.class);
+                    initM.invoke(null, this);
+                    java.lang.reflect.Method getM = cls.getMethod("getAutoContainerManager");
+                    acm = getM.invoke(null);
+                }
+                if (acm != null) {
+                    // Séquence complète :
+                    // sendInfo(30)           ← correctif maison écrans 8.8"/10.25" : bascule cluster
+                    //                          en mode 12" (sans bug fenêtre ADAS)
+                    // sleep(6s)              ← laisser Qt absorber le changement de mode
+                    // sendInfo(16)           ← Qt entre en mode projection plein écran
+                    // sleep(6s)              ← délai Freedom (RE onNavigationTypeChanged L2c11)
+                    // sendInfo(35)           ← Di4.0 mode → Qt enregistre Surface via JNI
+                    java.lang.reflect.Method sendM = acm.getClass()
+                            .getMethod("sendInfo", int.class, int.class, String.class);
+                    sendM.invoke(acm, 1000, 30, ""); // correctif écrans 8.8"/10.25" — mode cluster 12"
+                    res.append("  sendInfo(1000,30) ✅ (workaround ADAS 8.8\"/10.25\")\n");
+                    Thread.sleep(6000); // attendre que Qt absorbe le changement de taille
+                    sendM.invoke(acm, 1000, 16, ""); // Qt enters full-screen projection mode
+                    res.append("  sendInfo(1000,16) ✅\n");
+                    Thread.sleep(6000); // Freedom: sleep 6s before sendInfo(35)
+                    sendM.invoke(acm, 1000, 35, ""); // Di4.0 mode → Qt registers Surface via JNI
+                    res.append("  sendInfo(1000,35) ✅\n");
+                    runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+                } else {
+                    res.append("❌ AutoContainerManager null via getSystemService\n");
+                    res.append("→ Fallback shell...\n");
+                    runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+                    shellSync("service call AutoContainer 2 i32 1000 i32 30 s16 \"\""); // workaround ADAS
+                    Thread.sleep(6000);
+                    shellSync("service call AutoContainer 2 i32 1000 i32 16 s16 \"\"");
+                    Thread.sleep(6000);
+                    shellSync("service call AutoContainer 2 i32 1000 i32 35 s16 \"\"");
+                    res.append("  shell sendInfo(30→16→35) envoyés\n");
+                }
+            } catch (Exception e) {
+                res.append("⚠ Exception AutoContainerManager: ").append(e.getMessage()).append("\n");
+                res.append("→ Fallback shell...\n");
+                runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+                shellSync("service call AutoContainer 2 i32 1000 i32 30 s16 \"\""); // workaround ADAS
+                try { Thread.sleep(6000); } catch (InterruptedException ignored) {}
+                shellSync("service call AutoContainer 2 i32 1000 i32 16 s16 \"\"");
+                try { Thread.sleep(6000); } catch (InterruptedException ignored) {}
+                shellSync("service call AutoContainer 2 i32 1000 i32 35 s16 \"\"");
+                res.append("  shell sendInfo(30→16→35) envoyés\n");
+            }
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+
+            // ── Étape 2 : attendre 5s que Qt prépare son end-point JNI ──
+            res.append("\n── Étape 2 : attendre 5s Qt end-point JNI ──\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+            try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+
+            // ── Étape 3 : démarrer AutoDisplayService ──
+            res.append("\n── Étape 3 : am startservice AutoDisplayService ──\n");
+            String startResult = shellSync("am startservice com.xdja.containerservice/.AutoDisplayService");
+            res.append(startResult.isEmpty() ? "❌ pas de réponse\n" : startResult + "\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+            try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
+
+            // ── Étape 4 : vérifier les displays via DisplayManager Java (API 29) ──
+            res.append("\n── Étape 4 : displays présents ──\n");
+            DisplayManager dm = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+            android.view.Display[] allDisplays = dm.getDisplays();
+            int foundId = -1;
+            for (android.view.Display d : allDisplays) {
+                String name = d.getName();
+                int id = d.getDisplayId();
+                res.append("mDisplayId=").append(id).append(" name=").append(name).append("\n");
+                if (id != 0 && (name.contains("fission") || name.contains("remote_dashboard")
+                        || name.contains("xdja") || name.contains("Virtual"))) {
+                    foundId = id;
+                }
+            }
+            // Fallback : tout display non-0 est candidat cluster
+            if (foundId == -1 && allDisplays.length > 1) {
+                for (android.view.Display d : allDisplays) {
+                    if (d.getDisplayId() != 0) { foundId = d.getDisplayId(); break; }
+                }
+                res.append("⚠ Display non-nommé détecté, id=").append(foundId).append("\n");
+            }
+
+            if (foundId > 0) {
+                mFissionDisplayId = foundId;
+                res.append("✅ Display cluster trouvé ! id=").append(foundId).append("\n");
+            } else {
+                res.append("❌ Aucun display cluster créé\n");
+                res.append("→ sendInfo shell peut nécessiter plus de temps\n");
+                res.append("→ Freedom (ClusterDemoProcess) doit être installé\n");
+            }
+
+            AppLogger.i("FissionJavaDirect", "foundId=" + foundId);
+            final int finalId = foundId;
+            runOnUiThread(() -> {
+                tvFissionResult.setText(res.toString());
+                btnFissionViaBinder.setEnabled(true);
+                btnFissionLaunch.setEnabled(finalId > 0);
+            });
+        }).start();
+    }
+
+    // =========================================================================
+    // PIPELINE FISSION — Création du VirtualDisplay cluster
+    // =========================================================================
+    // Séquence découverte par RE de AutoDisplayService (com.xdja.containerservice) :
+    //   1. sendInfo(1000,16) → Qt entre en mode projection → enregistre Surface via JNI
+    //   2. am startservice AutoDisplayService → onStart() → updateDisplay() →
+    //      getQtProjectionDispInfo(0) != null → createVirtualDisplay("fission_testVirtualSurface")
+    //   3. am start-activity --display <fission_id> → app visible sur cluster
+    //
+    // Note: SecondaryDisplayService (Dilink5) ne démarre QUE sur API > 30 (Android 12+).
+    // Sur Seal EU (API 29), on lance directement sur fission_testVirtualSurface.
+    // =========================================================================
+
+    private void runFissionPipeline() {
+        tvFissionResult.setText("Séquence en cours...");
+        btnFissionPipeline.setEnabled(false);
+        btnFissionLaunch.setEnabled(false);
+        mFissionDisplayId = -1;
+
+        new Thread(() -> {
+            StringBuilder res = new StringBuilder();
+
+            // ── Étape 0 : état initial displays ────────────────────────────
+            String dispBefore = shellSync("dumpsys display | grep -E 'mDisplayId|mName'");
+            res.append("── Displays AVANT ──\n").append(dispBefore.isEmpty() ? "(vide)" : dispBefore).append("\n\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+
+            // ── Étape 1 : sendInfo(30→sleep6s→16→sleep6s→35) ─────────────────
+            // sendInfo(30) = correctif maison écrans 8.8"/10.25" : bascule cluster
+            //                en mode 12" (sans bug fenêtre ADAS)
+            // sleep(6s)    = laisser Qt absorber le changement de mode taille
+            // sendInfo(16) = Qt entre en mode projection plein écran (全屏投屏开启)
+            // sleep(6s)    = délai Freedom (RE onNavigationTypeChanged L2c11)
+            // sendInfo(35) = Di4.0 mode → Qt enregistre Surface via JNI
+            res.append("── sendInfo(1000,30) workaround ADAS 8.8\"/10.25\" ──\n");
+            String r30 = shellSync("service call AutoContainer 2 i32 1000 i32 30 s16 \"\"");
+            res.append(r30.isEmpty() ? "⚠ pas de réponse AutoContainer" : r30).append("\n\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+
+            // sleep(6s) — laisser Qt absorber sendInfo(30)
+            try { Thread.sleep(6000); } catch (InterruptedException ignored) {}
+
+            res.append("── sendInfo(1000,16) → Qt projection plein écran ON ──\n");
+            String r16 = shellSync("service call AutoContainer 2 i32 1000 i32 16 s16 \"\"");
+            res.append(r16.isEmpty() ? "❌ AutoContainer non disponible" : r16).append("\n\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+
+            // sleep(6s) — Freedom: délai entre sendInfo(16) et sendInfo(35)
+            try { Thread.sleep(6000); } catch (InterruptedException ignored) {}
+
+            res.append("── sendInfo(1000,35) → Di4.0 mode / Qt enregistre Surface JNI ──\n");
+            String r35 = shellSync("service call AutoContainer 2 i32 1000 i32 35 s16 \"\"");
+            res.append(r35.isEmpty() ? "⚠" : r35).append("\n\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+
+            // ── Étape 2 : démarrer AutoDisplayService ──────────────────────
+            // onStart() → updateDisplay() → getQtProjectionDispInfo(0)
+            // → si non-null → createVirtualDisplay("fission_testVirtualSurface", qtSurface, flags=11)
+            res.append("── am startservice AutoDisplayService ──\n");
+            String startSvc = shellSync("am startservice com.xdja.containerservice/.AutoDisplayService");
+            res.append(startSvc.isEmpty() ? "❌ startservice échoué" : startSvc).append("\n\n");
+            runOnUiThread(() -> tvFissionResult.setText(res.toString()));
+            try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+
+            // ── Étape 4 : vérifier les displays créés via DisplayManager Java ──
+            DisplayManager dm2 = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+            android.view.Display[] disps = dm2.getDisplays();
+            StringBuilder dispAfterSb = new StringBuilder();
+            int foundId2 = -1;
+            for (android.view.Display d : disps) {
+                String n = d.getName(); int id = d.getDisplayId();
+                dispAfterSb.append("mDisplayId=").append(id).append(" name=").append(n).append("\n");
+                if (id != 0 && (n.contains("fission") || n.contains("remote_dashboard")
+                        || n.contains("xdja") || n.contains("Virtual"))) {
+                    foundId2 = id;
+                }
+            }
+            if (foundId2 == -1 && disps.length > 1) {
+                for (android.view.Display d : disps) {
+                    if (d.getDisplayId() != 0) { foundId2 = d.getDisplayId(); break; }
+                }
+            }
+            String dispAfter = dispAfterSb.toString();
+            res.append("── Displays APRÈS ──\n").append(dispAfter.isEmpty() ? "(vide)" : dispAfter).append("\n\n");
+
+            if (foundId2 != -1) {
+                mFissionDisplayId = foundId2;
+                res.append("✅ Display cluster trouvé : displayId=").append(foundId2).append("\n");
+                res.append("→ Cliquer \"Lancer Dashboard\" pour lancer sur ce display\n\n");
+            } else {
+                res.append("❌ Aucun display cluster trouvé\n");
+                res.append("→ Vérifier: AutoContainer accessible ? sendInfo(16) reçu par Qt ?\n\n");
+            }
+
+            AppLogger.i("FissionPipeline", res.toString());
+            final boolean canLaunch = mFissionDisplayId != -1;
+            runOnUiThread(() -> {
+                tvFissionResult.setText(res.toString());
+                btnFissionPipeline.setEnabled(true);
+                btnFissionLaunch.setEnabled(canLaunch);
+            });
+        }).start();
+    }
+
+    /**
+     * Parse la sortie de "dumpsys display | grep -E 'mDisplayId|mName'"
+     * et retourne le displayId du premier display dont le nom contient nameContains.
+     * Format attendu (l'ID précède toujours le nom) :
+     *   mDisplayId=4
+     *   mName=fission_testVirtualSurface
+     */
+    private int parseDisplayIdByName(String output, String nameContains) {
+        int lastId = -1;
+        for (String line : output.split("\n")) {
+            String t = line.trim();
+            if (t.startsWith("mDisplayId=")) {
+                try {
+                    lastId = Integer.parseInt(t.substring("mDisplayId=".length()).trim());
+                } catch (NumberFormatException ignored) {}
+            } else if (t.startsWith("mName=") && t.contains(nameContains)) {
+                return lastId;
+            }
+        }
+        return -1;
+    }
+
+    private void launchOnFissionDisplay() {
+        if (mFissionDisplayId == -1) {
+            tvFissionResult.setText("❌ Pas de display fission. Lancer d'abord \"Créer Fission Display\".");
+            return;
+        }
+        tvFissionResult.setText("Lancement sur display " + mFissionDisplayId + "...");
+        btnFissionLaunch.setEnabled(false);
+
+        new Thread(() -> {
+            StringBuilder res = new StringBuilder();
+            String pkg = getPackageName();
+            // --windowingMode 5 = FREEFORM (obligatoire sur DiLink 3.0)
+            String cmd = "am start-activity -W --windowingMode 5 --display " + mFissionDisplayId
+                    + " " + pkg + "/.dashboard.BYDDashboardActivity";
+            res.append("Cmd:\n").append(cmd).append("\n\n");
+            String result = shellSync(cmd);
+            res.append(result.isEmpty() ? "❌ Pas de réponse" : result);
+            AppLogger.i("FissionLaunch", "displayId=" + mFissionDisplayId + " → " + result);
+            runOnUiThread(() -> {
+                tvFissionResult.setText(res.toString());
+                btnFissionLaunch.setEnabled(true);
+            });
+        }).start();
+    }
+
+    // =========================================================================
     // SNIFFER SYSTÈME — Reverse Engineering
     // =========================================================================
     // Capture logcat + dumpsys périodiques dans un fichier exportable.
@@ -618,7 +1010,7 @@ public class DiagActivity extends AppCompatActivity {
         TextView[] results = {
             tvAdbLocalResult, tvDaemonVdResult, tvDisplaySizeResult,
             tvDisplay1Result, tvDumpsysResult, tvTest13Result, tvSfDumpResult,
-            tvAutoDisplayResult, tvReSnifferStatus
+            tvAutoDisplayResult, tvFissionResult, tvReSnifferStatus
         };
         for (TextView tv : results) {
             if (tv == null) continue;
