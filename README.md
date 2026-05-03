@@ -37,6 +37,7 @@ BYD APIs.
 | 10 | **📋 System report** | Displays, permissions, build tags, APK signature |
 | 11 | **Live log** | LogActivity — DEBUG/INFO/WARN/ERROR levels, filters, share |
 | 12 | **Multilingual** | French / English / German / Italian / Turkish, selected on first launch |
+| 13 | **Floating overlay** | Two floating buttons: LOG (opens log) and GPS (returns to MainActivity) |
 
 ---
 
@@ -67,7 +68,8 @@ app/src/main/java/com/byd/myapp/
 ├── AppListAdapter.java         — RecyclerView (→ Cluster / ← Main / → Cluster / ✕)
 ├── AppLogger.java              — Singleton logger (levels, 3000 entries, saveToFile, share)
 ├── LogActivity.java            — Real-time log (filters, auto-scroll, share)
-├── FloatingLogButton.java      — Floating overlay (DEBUG builds only)
+├── FloatingLogButton.java      — Floating overlay: tap=LogActivity, long press=clear log
+├── FloatingRemoteButton.java   — Floating overlay: tap=MainActivity, long press=close
 ├── LocaleHelper.java           — Language persistence (SharedPreferences)
 ├── daemon/
 │   └── MirrorDaemon.java        — Core proxy class mirroring cluster display
@@ -188,7 +190,7 @@ See [Build requirements](#build-requirements) below.
 2. Sideload onto the infotainment unit:
 ```bash
 adb connect <car-ip>:5555
-adb install -r app/build/outputs/apk/debug/DashCast-v0.1.1-alpha-debug.apk
+adb install -r app/build/outputs/apk/debug/DashCast-v0.1.11-alpha-debug.apk
 ```
 3. Launch the app. On first launch, an **"Allow USB debugging?"** popup will appear **on the car's screen** — press **ALLOW**.
 4. The app should be functional immediately. If permissions are missing, open **⋮ menu → Diagnostic → TEST 1** to force-grant `BYDAUTO_*_COMMON` permissions via `pm grant`.
@@ -249,7 +251,7 @@ The `app/build.gradle` signing config applies this keystore for both debug and r
 ```bash
 cd MyBYDApp   # repo folder name
 ./gradlew assembleDebug
-# APK → app/build/outputs/apk/debug/DashCast-v0.1.5-alpha-debug.apk
+# APK → app/build/outputs/apk/debug/DashCast-v0.1.11-alpha-debug.apk
 ```
 
 ---
@@ -328,16 +330,20 @@ adb pull /sdcard/Android/data/com.byd.myapp/files/  # package ID unchanged
 
 ## Version history
 
-| Version | Summary |
-|---------|---------|
-| **0.1.7-alpha** | **Freedom-free** — VirtualDisplay creation confirmed (sendInfo 30→16→35 sequence), app fully autonomous. Sanity fixes. — **current public release** |
-| **0.1.6-alpha** | DiLink 5 RE sniffer, deep dumpsys, broadcast tracking |
-| **0.1.5-alpha** | Stability improvements (last release with Freedom dependency) |
-| **0.1.4-alpha** | Fix touch offset bug in cluster mirror input forwarding |
-| **0.1.3-alpha** | Full i18n (FR/EN/DE/IT/TR), string externalization |
-| **0.1.2-alpha** | EN translation, DashCast rename, new icon — device-validated |
-| **0.1.1-alpha** | Bug fixes, code sanity, README improvements |
-| **0.1.0-alpha** | First public release — cluster mirror working (image + touch) |
+| Version | versionCode | Summary |
+|---------|-------------|--------|
+| **0.1.11-alpha** | 12 | **Sanity checks #5→#8** — 4 rounds of static analysis: JMM volatile fields, dead code removal (~120 lines), empty catches logged, typo fixed, orphan imports/strings cleaned — **current** |
+| **0.1.10-alpha** | 11 | Sanity check #7 — orphan imports (Parcel, DisplayManager) + dead string (btn_adb_local_label ×5 locales) |
+| **0.1.9-alpha** | 10 | Sanity check #6 — safeOut() typo fix, readFileViaAdb() dead code removed, volatile on MirrorDaemon InputManager fields, InterruptedException flag restored |
+| **0.1.8-alpha** | 9 | Sanity check #5 — empty catches logged, handleLaunch() + parseDisplayIdByName() dead methods removed |
+| **0.1.7-alpha** | 8 | **Freedom-free** — all Freedom (com.xdja.clusterdemo) references removed, VirtualDisplay creation confirmed (sendInfo 30→16→35), fully autonomous |
+| **0.1.6-alpha** | — | DiLink 5 RE sniffer, deep dumpsys, broadcast tracking |
+| **0.1.5-alpha** | — | Stability improvements (last release with Freedom dependency) |
+| **0.1.4-alpha** | — | Fix touch offset bug in cluster mirror input forwarding |
+| **0.1.3-alpha** | — | Full i18n (FR/EN/DE/IT/TR), string externalization |
+| **0.1.2-alpha** | — | EN translation, DashCast rename, new icon — device-validated |
+| **0.1.1-alpha** | — | Bug fixes, code sanity, README improvements |
+| **0.1.0-alpha** | — | First public release — cluster mirror working (image + touch) |
 
 Full internal development history: [CHANGELOG.md](CHANGELOG.md)
 
