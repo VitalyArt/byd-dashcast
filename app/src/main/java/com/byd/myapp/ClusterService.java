@@ -216,6 +216,27 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                             @Override public void run() { callback.onResult(true); }
                         });
                     }
+
+                    // Verify after 2s that the WM actually honoured the FREEFORM inset bounds.
+                    // If not, a warning is logged with the wm overscan fallback suggestion.
+                    final String pkg = packageName;
+                    mMainHandler.postDelayed(new Runnable() {
+                        @Override public void run() {
+                            AdbLocalClient.checkTaskBoundsOnDisplay(
+                                    ClusterService.this, pkg,
+                                    CLUSTER_INSET_H + "," + CLUSTER_INSET_V
+                                    + "," + (1920 - CLUSTER_INSET_H)
+                                    + "," + (1080 - CLUSTER_INSET_V),
+                                    new AdbLocalClient.Callback() {
+                                        @Override public void onSuccess(String msg) {
+                                            AppLogger.i(TAG, "bounds check: " + msg);
+                                        }
+                                        @Override public void onError(String err) {
+                                            AppLogger.w(TAG, "bounds check ADB error: " + err);
+                                        }
+                                    });
+                        }
+                    }, 2000);
                 } catch (Exception e) {
                     AppLogger.e(TAG, "Global launch error for " + packageName, e);
                     if (callback != null) {

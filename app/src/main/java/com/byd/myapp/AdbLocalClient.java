@@ -1118,6 +1118,75 @@ public class AdbLocalClient {
         }); // screenshot-mirror-thread
     }
 
+    /**
+     * Checks whether the WM actually honoured the FREEFORM bounds requested at launch.
+     *
+     * Runs 'dumpsys activity tasks' (uid=2000) and looks for the task stack that contains
+     * {@code packageName}. Extracts the actual task bounds and compares them against
+     * {@code expectedBounds} (format: "left,top,right,bottom"). Logs the result and
+     * fires the callback on success or error.
+     *
+     * Expected bounds string format: "80,50,1840,1030"
+     *
+     * Callback.onSuccess(msg): called whether bounds match or not — msg contains the verdict.
+     * Callback.onError(msg):   called only if the ADB command itself fails.
+     */
+    public static void checkTaskBoundsOnDisplay(
+            final Context context,
+            final String packageName,
+            final String expectedBounds,
+            final Callback callback) {
+        sExecutor.execute(new Runnable() {
+            @Override public void run() {
+                try (Dadb dadb = connect(context)) {
+                    // Dump only the lines around our package to avoid giant output
+                    String cmd = "dumpsys activity tasks 2>/dev/null"
+                            + " | grep -A 10 '" + packageName + "'"
+                            + " | grep -E 'bounds|realActivity|effectiveBounds' | head -5";
+                    String out = dadb.shell(cmd).getAllOutput().trim();
+                    AppLogger.i(TAG, "checkTaskBounds [" + packageName + "] raw: " + out);
+
+                    // Parse: bounds=[left,top][right,bottom] or bounds=Rect(l, t - r, b)
+                    // DiLink 3.0 format: bounds=[80,50][1840,1030]
+                    String actual = "(not found)";
+                    for (String line : out.split("\n")) {
+                        line = line.trim();
+                        if (line.startsWith("bounds")) { actual = line; break; }
+                    }
+
+                    boolean matched = !actual.equals("(not found)")
+                            && actual.contains(expectedBounds.replace(",", ",")
+                                    .replace(",", ","));
+                    // Broader check: look for each component of expectedBounds in the line
+                    if (!matched && !actual.equals("(not found)")) {
+                        String[] parts = expectedBounds.split(",");
+                        matched = true;
+                        for (String p : parts) { if (!actual.contains(p.trim())) { matched = false; break; } }
+                    }
+
+                    String verdict;
+                    if (actual.equals("(not found)")) {
+                        verdict = "⚠ setLaunchBounds: task not found in dumpsys (app may not have started yet)";
+                        AppLogger.w(TAG, verdict);
+                    } else if (matched) {
+                        verdict = "✅ setLaunchBounds OK — actual: " + actual;
+                        AppLogger.i(TAG, verdict);
+                    } else {
+                        verdict = "❌ setLaunchBounds IGNORED by WM — expected: " + expectedBounds
+                                + " actual: " + actual
+                                + " → consider wm overscan 80,50,80,50 -d 1 as fallback";
+                        AppLogger.w(TAG, verdict);
+                    }
+                    if (callback != null) callback.onSuccess(verdict);
+                } catch (Exception e) {
+                    if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                    AppLogger.e(TAG, "checkTaskBoundsOnDisplay error", e);
+                    if (callback != null) callback.onError(e.getClass().getSimpleName() + ": " + e.getMessage());
+                }
+            }
+        }); // adb-check-bounds-thread
+    }
+
     private static String safeOut(String s) {
         if (s == null) return "(null)";
         s = s.trim();
