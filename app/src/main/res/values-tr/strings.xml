@@ -15,6 +15,7 @@
     <!-- MainActivity — status bar -->
     <string name="status_disconnected">Gösterge paneli: bağlı değil</string>
     <string name="btn_activate_cluster">Kümeyi etkinleştir</string>
+    <string name="btn_show_mirror">📺 Yansıt</string>
     <string name="btn_restore_cluster">Kümeyi geri yükle</string>
     <string name="btn_origin_cluster">Orijinal küme</string>
     <string name="title_app_list">Yüklü uygulamalar</string>

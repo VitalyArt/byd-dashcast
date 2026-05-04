@@ -112,6 +112,7 @@ public class MainActivity extends AppCompatActivity
     private Button   btnRestoreCluster;
     private Button   btnOriginCluster;
     private Button   btnOverflow;
+    private Button   btnShowMirror;
     private Button   btnSplitLayout;
     private RecyclerView rvApps;
     private AppListAdapter mAdapter;
@@ -191,6 +192,7 @@ public class MainActivity extends AppCompatActivity
         btnRestoreCluster   = (Button)   findViewById(R.id.btn_restore_cluster);
         btnOriginCluster    = (Button)   findViewById(R.id.btn_origin_cluster);
         btnOverflow         = (Button)   findViewById(R.id.btn_overflow);
+        btnShowMirror       = (Button)   findViewById(R.id.btn_show_mirror);
         rvApps             = (RecyclerView) findViewById(R.id.rv_apps);
 
         // App list
@@ -221,6 +223,16 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onClick(View v) {
                 showOverflowMenu(v);
+            }
+        });
+
+        // Button 📺 Mirror — reopen the mirror+tactile panel for the app running on the cluster
+        btnShowMirror.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showMirrorView();
+                attemptStartMirrorWithCurrentHolder();
+                AppLogger.d(TAG, "btn_show_mirror → showMirrorView for " + mCurrentDashboardApp);
             }
         });
 
@@ -1029,8 +1041,12 @@ public class MainActivity extends AppCompatActivity
         tvDashboardStatus.setTextColor(Color.WHITE);
         if (appName == null) {
             tvDashboardStatus.setText(getString(R.string.status_dashboard_byd));
+            // No app on cluster — hide the mirror shortcut
+            btnShowMirror.setVisibility(View.GONE);
         } else {
             tvDashboardStatus.setText(getString(R.string.status_dashboard_app, appName));
+            // App active on cluster — show the mirror shortcut in the status bar
+            btnShowMirror.setVisibility(View.VISIBLE);
         }
         btnRestoreCluster.setEnabled(true);
     }

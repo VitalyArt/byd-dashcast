@@ -34,6 +34,18 @@
             android:backgroundTint="#1565C0"/>
 
         <Button
+            android:id="@+id/btn_show_mirror"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="@string/btn_show_mirror"
+            android:textSize="12sp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="#00695C"
+            android:visibility="gone"/>
+
+        <Button
             android:id="@+id/btn_restore_cluster"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
