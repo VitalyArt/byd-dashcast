@@ -102,21 +102,6 @@ public class ClusterInputForwarder {
     }
 
     /**
-     * Forwards a touch event to the cluster via InputManager.injectInputEvent
-     * with setDisplayId — identical to what WindowManagement v1.2 does.
-     *
-     * @param padX / padY  Coordinates already mapped to cluster space (not view space)
-     * @param padW / padH  Reference dimensions (= mClusterWidth/Height if already mapped)
-     * @param action       MotionEvent.ACTION_DOWN / ACTION_MOVE / ACTION_UP
-     */
-    public void forwardTouch(float padX, float padY, float padW, float padH, final int action) {
-        // Proportional mapping to cluster space
-        final float clusterX = (padX / padW) * mClusterWidth;
-        final float clusterY = (padY / padH) * mClusterHeight;
-        injectTouchAt(clusterX, clusterY, action);
-    }
-
-    /**
      * Forwards pre-mapped cluster coordinates directly, without any re-normalization.
      * Use this when the caller has already computed exact cluster-space coordinates
      * from the stored projection parameters (avoids double-normalization bugs).

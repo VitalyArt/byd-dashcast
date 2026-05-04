@@ -90,8 +90,8 @@ public class MainActivity extends AppCompatActivity
             if (mDashboardLauncher != null) mDashboardLauncher.setDashboardDisplayId(-1);
             stopTrackingApp();
             mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+            mCurrentDashboardPkg = null;
+            btnActivateCluster.setEnabled(true);
             mMainDisplayPkg      = null;
             clearSplitState();
             if (mAdapter != null) mAdapter.setCurrentPackage(null);
@@ -588,8 +588,7 @@ public class MainActivity extends AppCompatActivity
     public void onSendToMain(AppInfo app) {
         // Clean up cluster state before move
         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+        mCurrentDashboardPkg = null;
         // Force-stop the secondary slot in split mode (prevents it from staying on display 1)
         if (mSecondDashboardPkg != null) {
             AdbLocalClient.forceStopApp(this, mSecondDashboardPkg, null);
@@ -602,7 +601,7 @@ public class MainActivity extends AppCompatActivity
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .edit().putString(PREF_MAIN_PKG, app.packageName).apply();
         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+        btnActivateCluster.setEnabled(true);
         showAppList();
         // Move the running task to display 0 without relaunching.
         // Falls back to launchOnMainDisplay() if no task is found.
@@ -632,8 +631,7 @@ public class MainActivity extends AppCompatActivity
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
                         // Force-stop le slot secondaire en mode split
                         if (mSecondDashboardPkg != null) {
                             AdbLocalClient.forceStopApp(MainActivity.this, mSecondDashboardPkg, null);
@@ -648,7 +646,7 @@ public class MainActivity extends AppCompatActivity
                         }
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         Toast.makeText(MainActivity.this,
                                 getString(R.string.toast_app_stopped, app.appName),
@@ -680,8 +678,6 @@ public class MainActivity extends AppCompatActivity
         return null;
     }
 
-    /**
-     * Starts the preview VirtualDisplay if the Surface is ready.
     /**
      * Attempts to retrieve the daemon Binder from ServiceManager (via reflection).
      * Called in onStart() if mDaemonBinder == null (daemon already running, app returned to foreground).
@@ -1166,12 +1162,11 @@ public class MainActivity extends AppCompatActivity
                             mClusterService.stopProjectionNoAdb();
                         }
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnRestoreCluster.setEnabled(true);
                         AppLogger.log(TAG, "BYD restored via ADB ✓");
@@ -1228,12 +1223,11 @@ public class MainActivity extends AppCompatActivity
                             mClusterService.stopProjectionNoAdb();
                         }
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnOriginCluster.setEnabled(true);
                         AppLogger.log(TAG, "Original cluster restored ✓");

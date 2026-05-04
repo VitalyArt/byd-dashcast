@@ -34,9 +34,8 @@ public class MirrorDaemon {
     private static final String TAG = "MirrorDaemon";
 
     // Actions broadcast
-    public static final String ACTION_DAEMON_READY   = "com.byd.myapp.MIRROR_DAEMON_READY";
-    public static final String ACTION_DAEMON_LAUNCH  = "com.byd.myapp.MIRROR_DAEMON_LAUNCH";
-    public static final String ACTION_REQUEST_BINDER = "com.byd.myapp.MIRROR_REQUEST_BINDER";
+    public static final String ACTION_DAEMON_READY  = "com.byd.myapp.MIRROR_DAEMON_READY";
+    public static final String ACTION_DAEMON_LAUNCH = "com.byd.myapp.MIRROR_DAEMON_LAUNCH";
 
     // Interface Binder
     public static final String DESCRIPTOR            = "com.byd.myapp.daemon.IMirrorDaemon";

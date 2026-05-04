@@ -408,56 +408,6 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Launches an app on a specific displayId (e.g. VirtualDisplay preview from ClusterMirrorManager).
-     * Short delay (500ms) because the display is already ready (no Freedom activation needed).
-     * Uses the same IActivityManager reflection as launchOnDashboard().
-     */
-    public void launchOnSpecificDisplay(final String packageName, final int displayId,
-            final LaunchCallback callback) {
-        AppLogger.i(TAG, "launchOnSpecificDisplay → " + packageName + " on display=" + displayId);
-        mMainHandler.postDelayed(new Runnable() {
-            @Override public void run() {
-                try {
-                    android.content.Intent launchIntent =
-                            getPackageManager().getLaunchIntentForPackage(packageName);
-                    if (launchIntent == null) {
-                        AppLogger.e(TAG, "No intent for " + packageName);
-                        if (callback != null) {
-                            mMainHandler.post(new Runnable() {
-                                @Override public void run() { callback.onResult(false); }
-                            });
-                        }
-                        return;
-                    }
-                    // MULTIPLE_TASK (not CLEAR_TASK): allows 2 independent instances
-                    // without killing the instance already launched on the cluster (Display 2)
-                    launchIntent.addFlags(0x10000000 | 0x08000000); // NEW_TASK | MULTIPLE_TASK
-                    android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
-                    opts.setLaunchDisplayId(displayId);
-                    if (displayId > 0) applyClusterFreeformBounds(opts, displayId);
-
-                    startActivityViaIAM(launchIntent, opts);
-
-                    AppLogger.i(TAG, "launchOnSpecificDisplay succeeded → " + packageName
-                            + " on display=" + displayId);
-                    if (callback != null) {
-                        mMainHandler.post(new Runnable() {
-                            @Override public void run() { callback.onResult(true); }
-                        });
-                    }
-                } catch (Exception e) {
-                    AppLogger.e(TAG, "launchOnSpecificDisplay ERROR", e);
-                    if (callback != null) {
-                        mMainHandler.post(new Runnable() {
-                            @Override public void run() { callback.onResult(false); }
-                        });
-                    }
-                }
-            }
-        }, 500);
-    }
-
-    /**
      * Applies WINDOWING_MODE_FREEFORM + inset bounds to ActivityOptions for cluster launches.
      * Both @hide APIs are accessed via reflection.
      * Inset ({@link #CLUSTER_INSET_H}/{@link #CLUSTER_INSET_V}) avoids content clipping at the
