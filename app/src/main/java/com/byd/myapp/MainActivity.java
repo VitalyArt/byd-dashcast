@@ -954,35 +954,110 @@ public class MainActivity extends AppCompatActivity
     }
 
     /**
-     * Finds the main PID of packageName via ActivityManager.getRunningAppProcesses().
-     * Returns -1 if not found (app not yet started or ROM hides the list).
+     * Finds the main PID of packageName by scanning /proc/[pid]/cmdline.
+     * Uses the same /proc filesystem as the watchdog tick — no Android API, no permissions.
+     * On Android 10+ (targetSdk=29), getRunningAppProcesses() only returns our own process
+     * for third-party apps (privacy restriction since API 26), so /proc is the only reliable way.
+     * Returns -1 only if /proc is unreadable (should never happen on Android).
      */
     private int findPid(String packageName) {
-        try {
-            android.app.ActivityManager am =
-                    (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
-            java.util.List<android.app.ActivityManager.RunningAppProcessInfo> procs =
-                    am.getRunningAppProcesses();
-            if (procs == null) return -1;
-            for (android.app.ActivityManager.RunningAppProcessInfo p : procs) {
-                if (packageName.equals(p.processName)) return p.pid;
+        java.io.File procDir = new java.io.File("/proc");
+        String[] entries = procDir.list();
+        if (entries == null) return -1;
+        for (String entry : entries) {
+            boolean isNumeric = true;
+            for (int i = 0; i < entry.length(); i++) {
+                if (entry.charAt(i) < '0' || entry.charAt(i) > '9') { isNumeric = false; break; }
             }
-        } catch (Exception e) {
-            AppLogger.w(TAG, "findPid: " + e.getMessage());
+            if (!isNumeric) continue;
+            java.io.File cmdlineFile = new java.io.File("/proc/" + entry + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    // Exact match on main process (packageName == processName)
+                    // or sub-process (e.g. "com.pkg:service") — both start with packageName
+                    if (cmdline.equals(packageName)) {
+                        return Integer.parseInt(entry); // exact main process — prefer this
+                    }
+                }
+            } catch (Exception ignore) {
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+        }
+        // Second pass: accept sub-processes (e.g. :remote, :ui) if main not found
+        for (String entry : entries) {
+            boolean isNumeric = true;
+            for (int i = 0; i < entry.length(); i++) {
+                if (entry.charAt(i) < '0' || entry.charAt(i) > '9') { isNumeric = false; break; }
+            }
+            if (!isNumeric) continue;
+            java.io.File cmdlineFile = new java.io.File("/proc/" + entry + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    if (cmdline.startsWith(packageName)) {
+                        return Integer.parseInt(entry);
+                    }
+                }
+            } catch (Exception ignore) {
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
         }
         return -1;
     }
 
     /**
-     * Fast liveness check for a known PID: just tests /proc/[pid] directory existence.
+     * Fast liveness check: tests /proc/[pid] directory existence (1 stat syscall).
+     * Also verifies the cmdline still starts with packageName to guard against PID reuse
+     * (a new process getting the same PID after the tracked app was killed).
      * If the PID is unknown (-1), falls back to the full /proc scan.
-     * Cost (known PID): 1 stat syscall — negligible.
      */
     private boolean isPidAlive(String packageName, int pid) {
         if (pid > 0) {
-            return new java.io.File("/proc/" + pid).exists();
+            java.io.File pidDir = new java.io.File("/proc/" + pid);
+            if (!pidDir.exists()) return false;
+            // Verify the PID still belongs to the expected package (PID reuse guard)
+            java.io.File cmdlineFile = new java.io.File("/proc/" + pid + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    return cmdline.startsWith(packageName);
+                }
+            } catch (Exception ignore) {
+                // Process may have just exited — treat as dead
+                return false;
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+            return false;
         }
-        // PID unknown — fall back to full scan
+        // PID unknown — fall back to full scan (should not happen after findPid() fix)
         return isProcessRunning(packageName);
     }
 
