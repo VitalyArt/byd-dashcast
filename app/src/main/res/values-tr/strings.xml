@@ -204,4 +204,15 @@
     <string name="diag_btn_cleanup">🗑️ İzleme dosyalarını sil</string>
     <string name="diag_cleanup_running">Temizleniyor…</string>
     <string name="diag_cleanup_done">%1$d dosya silindi — kalan depolama: %2$s</string>
+
+    <!-- SettingsActivity -->
+    <string name="settings_header">Ayarlar</string>
+    <string name="settings_cluster_type_title">Küme tipi</string>
+    <string name="settings_overscan_section_title">Ekran kenar boşlukları (overscan)</string>
+    <string name="settings_overscan_desc">Gösterge ekranındaki içeriği çerçevelemek için kenar boşluklarını ayarlayın. Değerler bir sonraki başlatmada uygulanır.</string>
+    <string name="settings_inset_h_label">Sol / Sağ:</string>
+    <string name="settings_inset_v_label">Üst / Alt:</string>
+    <string name="settings_btn_apply_overscan">Şimdi uygula</string>
+    <string name="settings_btn_reset_overscan">Sıfırla (80 / 50)</string>
+    <string name="settings_overscan_applied">✓ Uygulandı — S/S: %1$d px, Ü/A: %2$d px</string>
 </resources>

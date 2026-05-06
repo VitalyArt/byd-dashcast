@@ -40,11 +40,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     private static final int NOTIF_ID = 1;
     public static boolean sIsRunning = false;
 
-    // Inset applied to FREEFORM launch bounds on the cluster to avoid content clipping at
-    // the physical screen edges (curved glass, bezel) of the BYD Seal EU 12.3" cluster.
-    // Tune these values if content is still clipped or too inset.
-    private static final int CLUSTER_INSET_H = 80;  // pixels removed on each horizontal side
-    private static final int CLUSTER_INSET_V = 50;  // pixels removed on each vertical side
+    // Overscan inset values are stored in SharedPreferences and editable via SettingsActivity.
+    // Defaults: H=80 (left/right), V=50 (top/bottom). Read at each use so changes apply live.
 
     // ── Listener for MainActivity ───────────────────────────────────────────
     public interface Listener {
@@ -136,6 +133,18 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     private void startNativeProjection() {
         AppLogger.i(TAG, "Starting cluster projection (native)...");
         mDisplayHelper.start();
+    }
+
+    /** Returns the current horizontal overscan inset (left + right) from persistent settings. */
+    private int getInsetH() {
+        return getSharedPreferences("byd_app_prefs", MODE_PRIVATE)
+                .getInt(SettingsActivity.PREF_INSET_H, SettingsActivity.DEFAULT_INSET_H);
+    }
+
+    /** Returns the current vertical overscan inset (top + bottom) from persistent settings. */
+    private int getInsetV() {
+        return getSharedPreferences("byd_app_prefs", MODE_PRIVATE)
+                .getInt(SettingsActivity.PREF_INSET_V, SettingsActivity.DEFAULT_INSET_V);
     }
 
     public void setListener(Listener listener) {
@@ -247,8 +256,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         // Apply the same inset bounds as applyClusterFreeformBounds()
                         try {
                             android.graphics.Rect bounds = new android.graphics.Rect(
-                                    CLUSTER_INSET_H, CLUSTER_INSET_V,
-                                    1920 - CLUSTER_INSET_H, 720 - CLUSTER_INSET_V);
+                                    getInsetH(), getInsetV(),
+                                    1920 - getInsetH(), 720 - getInsetV());
                             iAtmClass.getMethod("resizeTask",
                                     int.class, android.graphics.Rect.class, int.class)
                                     .invoke(iatm, taskId, bounds, 1 /* RESIZE_MODE_FORCED */);
@@ -389,7 +398,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     /**
      * Applies WINDOWING_MODE_FREEFORM + inset bounds to ActivityOptions for cluster launches.
      * Both @hide APIs are accessed via reflection.
-     * Inset ({@link #CLUSTER_INSET_H}/{@link #CLUSTER_INSET_V}) avoids content clipping at the
+     * Inset (H/V from SettingsActivity prefs) avoids content clipping at the
      * physical curved edges of the BYD Seal EU cluster screen.
      */
     private void applyClusterFreeformBounds(android.app.ActivityOptions opts, int displayId) {
@@ -411,8 +420,8 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
             AppLogger.w(TAG, "getRealSize failed: " + e.getMessage());
         }
         android.graphics.Rect bounds = new android.graphics.Rect(
-                CLUSTER_INSET_H, CLUSTER_INSET_V,
-                sz.x - CLUSTER_INSET_H, sz.y - CLUSTER_INSET_V);
+                getInsetH(), getInsetV(),
+                sz.x - getInsetH(), sz.y - getInsetV());
         try {
             java.lang.reflect.Method setLB = android.app.ActivityOptions.class
                     .getDeclaredMethod("setLaunchBounds", android.graphics.Rect.class);
@@ -499,12 +508,14 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
         // because apps there are not tracked by the standard WM task system.
         // SAFETY GUARD: never apply overscan to the main display (id 0 or negative).
         if (displayId > 0) {
+            final int insetH = getInsetH();
+            final int insetV = getInsetV();
             AdbLocalClient.executeShell(this,
-                    "wm overscan " + CLUSTER_INSET_H + "," + CLUSTER_INSET_V
-                    + "," + CLUSTER_INSET_H + "," + CLUSTER_INSET_V
+                    "wm overscan " + insetH + "," + insetV
+                    + "," + insetH + "," + insetV
                     + " -d " + displayId);
             AppLogger.i(TAG, "wm overscan applied on display " + displayId
-                    + " inset=" + CLUSTER_INSET_H + "," + CLUSTER_INSET_V);
+                    + " inset=" + insetH + "," + insetV);
         } else {
             AppLogger.w(TAG, "wm overscan skipped: displayId=" + displayId + " (must be > 0)");
         }

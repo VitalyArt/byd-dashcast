@@ -203,4 +203,13 @@
     <string name="diag_btn_cleanup">🗑️ Supprimer les fichiers de traces</string>
     <string name="diag_cleanup_running">Nettoyage en cours…</string>
     <string name="diag_cleanup_done">%1$d fichier(s) supprimé(s) — stockage restant : %2$s</string>
-</resources>
+    <!-- SettingsActivity -->
+    <string name="settings_header">Paramètres</string>
+    <string name="settings_cluster_type_title">Type de cluster</string>
+    <string name="settings_overscan_section_title">Marges d\'affichage (overscan)</string>
+    <string name="settings_overscan_desc">Ajustez les marges pour cadrer le contenu sur l\'écran du tableau de bord. Les valeurs s\'appliquent immédiatement au prochain lancement.</string>
+    <string name="settings_inset_h_label">Gauche / Droite :</string>
+    <string name="settings_inset_v_label">Haut / Bas :</string>
+    <string name="settings_btn_apply_overscan">Appliquer maintenant</string>
+    <string name="settings_btn_reset_overscan">Réinitialiser (80 / 50)</string>
+    <string name="settings_overscan_applied">✓ Appliqué — G/D : %1$d px, H/B : %2$d px</string></resources>

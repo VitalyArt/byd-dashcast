@@ -203,4 +203,15 @@
     <string name="diag_btn_cleanup">🗑️ Delete trace files</string>
     <string name="diag_cleanup_running">Cleaning up…</string>
     <string name="diag_cleanup_done">%1$d file(s) deleted — remaining storage: %2$s</string>
+
+    <!-- SettingsActivity -->
+    <string name="settings_header">Settings</string>
+    <string name="settings_cluster_type_title">Cluster type</string>
+    <string name="settings_overscan_section_title">Display margins (overscan)</string>
+    <string name="settings_overscan_desc">Adjust margins to frame content on the dashboard screen. Values apply immediately on next launch.</string>
+    <string name="settings_inset_h_label">Left / Right:</string>
+    <string name="settings_inset_v_label">Top / Bottom:</string>
+    <string name="settings_btn_apply_overscan">Apply now</string>
+    <string name="settings_btn_reset_overscan">Reset (80 / 50)</string>
+    <string name="settings_overscan_applied">✓ Applied — L/R: %1$d px, T/B: %2$d px</string>
 </resources>

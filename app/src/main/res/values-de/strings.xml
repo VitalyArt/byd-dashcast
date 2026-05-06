@@ -204,4 +204,15 @@
     <string name="diag_btn_cleanup">🗑️ Trace-Dateien löschen</string>
     <string name="diag_cleanup_running">Bereinigung läuft…</string>
     <string name="diag_cleanup_done">%1$d Datei(en) gelöscht — verbleibender Speicher: %2$s</string>
+
+    <!-- SettingsActivity -->
+    <string name="settings_header">Einstellungen</string>
+    <string name="settings_cluster_type_title">Cluster-Typ</string>
+    <string name="settings_overscan_section_title">Anzeigeränder (Overscan)</string>
+    <string name="settings_overscan_desc">Randwerte anpassen, um Inhalte auf dem Kombiinstrument zu positionieren. Werte gelten ab dem nächsten Start.</string>
+    <string name="settings_inset_h_label">Links / Rechts:</string>
+    <string name="settings_inset_v_label">Oben / Unten:</string>
+    <string name="settings_btn_apply_overscan">Jetzt anwenden</string>
+    <string name="settings_btn_reset_overscan">Zurücksetzen (80 / 50)</string>
+    <string name="settings_overscan_applied">✓ Angewendet — L/R: %1$d px, O/U: %2$d px</string>
 </resources>

@@ -1111,7 +1111,7 @@ public class MainActivity extends AppCompatActivity
             @Override
             public boolean onMenuItemClick(MenuItem item) {
                 switch (item.getItemId()) {
-                    case 1: showClusterTypeSettings(); return true;
+                    case 1: startActivity(new Intent(MainActivity.this, SettingsActivity.class)); return true;
                     case 2: startActivity(new Intent(MainActivity.this, DiagActivity.class)); return true;
                     case 3: startActivity(new Intent(MainActivity.this, SysInfoActivity.class)); return true;
                     case 4: startActivity(new Intent(MainActivity.this, LogActivity.class)); return true;

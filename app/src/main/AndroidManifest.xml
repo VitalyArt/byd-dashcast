@@ -126,6 +126,13 @@
             android:theme="@style/AppTheme.NoActionBar"
             android:launchMode="singleTop"/>
 
+        <!-- User-facing settings (overscan tuning, cluster type) -->
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/settings_header"
+            android:screenOrientation="landscape"
+            android:parentActivityName=".MainActivity"/>
+
         <!-- Trampoline display 1 : permet de lancer une app tierce sur le cluster
              en passant par notre propre uid (isCallerAllowedToLaunchOnDisplay
              retourne true quand targetUid == callingUid).
