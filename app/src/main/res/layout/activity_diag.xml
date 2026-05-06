@@ -468,6 +468,76 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- 7. TEST RESIZE DILINK5 (setTaskWindowingMode 4→5 + resizeTask FORCED=3) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#ffffff"
+            android:elevation="3dp"
+            android:padding="16dp"
+            android:layout_marginBottom="16dp"
+            android:layout_marginHorizontal="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/diag_s7_title"
+                android:textSize="18sp"
+                android:textColor="#3B4252"
+                android:textStyle="bold"
+                android:layout_marginBottom="6dp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/diag_s7_desc"
+                android:textSize="12sp"
+                android:textColor="#4C566A"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/tv_resize_diag_result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:background="#E5E9F0"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- Bouton 1 : séquence exacte DiLink5 (4→5→resize FORCED=3) -->
+            <Button
+                android:id="@+id/btn_resize_dilink5_seq"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/diag_btn_resize_dilink5_seq"
+                android:backgroundTint="#5E81AC"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp"/>
+
+            <!-- Bouton 2 : resizeTask seul avec FORCED=3 (sans changement windowing) -->
+            <Button
+                android:id="@+id/btn_resize_forced_only"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/diag_btn_resize_forced_only"
+                android:backgroundTint="#88C0D0"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp"/>
+
+            <!-- Bouton 3 : inspecter la task actuelle (windowing mode, stack id, bounds) -->
+            <Button
+                android:id="@+id/btn_resize_inspect_task"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/diag_btn_resize_inspect_task"
+                android:backgroundTint="#434C5E"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="6dp"/>
+
+        </LinearLayout>
+
         <!-- 6. NETTOYAGE STOCKAGE -->
         <LinearLayout
             android:layout_width="match_parent"
