@@ -332,11 +332,6 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                             @Override public void run() { callback.onResult(true); }
                         });
                     }
-
-                    // Apply FREEFORM bounds after launch via IActivityTaskManager.
-                    // Required because Context.startActivity() ignores ActivityOptions.setLaunchBounds
-                    // on FLAG_PRESENTATION virtual displays (IAM path above may have fallen back).
-                    applyFreeformBoundsAfterLaunch(packageName);
                 } catch (Exception e) {
                     AppLogger.e(TAG, "Global launch error for " + packageName, e);
                     if (callback != null) {
@@ -389,55 +384,6 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     public int getDisplayId() {
         return mDisplayHelper.getKnownClusterDisplayId();
-    }
-
-    /**
-     * After launching an app on the cluster, applies FREEFORM + inset bounds via
-     * IActivityTaskManager.setTaskWindowingMode() + resizeTask().
-     * Retries up to 3 times (every 1 s) to handle slow-starting apps.
-     * Runs on a background thread; does not block the caller.
-     */
-    private void applyFreeformBoundsAfterLaunch(final String packageName) {
-        new Thread(new Runnable() {
-            @Override public void run() {
-                final android.graphics.Rect bounds = new android.graphics.Rect(
-                        CLUSTER_INSET_H, CLUSTER_INSET_V,
-                        1920 - CLUSTER_INSET_H, 720 - CLUSTER_INSET_V);
-                for (int attempt = 0; attempt < 3; attempt++) {
-                    try { Thread.sleep(attempt == 0 ? 1500 : 1000); }
-                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
-                    int taskId = findRunningTaskId(packageName);
-                    if (taskId == -1) {
-                        AppLogger.d(TAG, "applyFreeformBounds: task not found (attempt "
-                                + (attempt + 1) + "/3) → retry");
-                        continue;
-                    }
-                    try {
-                        Class<?> atmClass = Class.forName("android.app.ActivityTaskManager");
-                        Object iatm = atmClass.getMethod("getService").invoke(null);
-                        Class<?> iAtmClass = iatm.getClass();
-                        try {
-                            iAtmClass.getMethod("setTaskWindowingMode",
-                                    int.class, int.class, boolean.class)
-                                    .invoke(iatm, taskId, 5 /* WINDOWING_MODE_FREEFORM */, true);
-                            AppLogger.i(TAG, "applyFreeformBounds: FREEFORM OK taskId=" + taskId);
-                        } catch (Exception e) {
-                            AppLogger.w(TAG, "applyFreeformBounds: setTaskWindowingMode: " + e.getMessage());
-                        }
-                        iAtmClass.getMethod("resizeTask",
-                                int.class, android.graphics.Rect.class, int.class)
-                                .invoke(iatm, taskId, bounds, 1 /* RESIZE_MODE_FORCED */);
-                        AppLogger.i(TAG, "applyFreeformBounds: resizeTask " + bounds
-                                + " OK taskId=" + taskId);
-                        return; // success
-                    } catch (Exception e) {
-                        AppLogger.w(TAG, "applyFreeformBounds attempt " + (attempt + 1)
-                                + ": " + e.getMessage());
-                    }
-                }
-                AppLogger.w(TAG, "applyFreeformBounds: gave up after 3 attempts for " + packageName);
-            }
-        }, "apply-bounds-thread").start();
     }
 
     /**
@@ -513,6 +459,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     /** Cleanly stops the projection (sendInfo(0) + stopService AutoDisplayService). */
     public void stopProjection() {
         AppLogger.log(TAG, "stopProjection requested");
+        AdbLocalClient.executeShell(this, "wm overscan reset -d 1");
         mProjectionActive = false;
         mDisplayHelper.stop();
         mLauncher.setDashboardDisplayId(-1);
@@ -527,6 +474,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
      */
     public void stopProjectionNoAdb() {
         AppLogger.log(TAG, "stopProjectionNoAdb requested (ADB already sent)");
+        AdbLocalClient.executeShell(this, "wm overscan reset -d 1");
         mProjectionActive = false;
         mDisplayHelper.stopWithoutAdb();
         mLauncher.setDashboardDisplayId(-1);
@@ -544,6 +492,17 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
         mInputForwarder.setClusterDisplay(display);
         mInputForwarder.setClusterDisplayId(displayId);
         updateNotification("Cluster active — display " + displayId);
+
+        // Apply display-level insets via wm overscan so all apps launched on this display
+        // stay within the safe area [INSET_H, INSET_V, 1920-INSET_H, 720-INSET_V].
+        // This is the only approach that works on FLAG_PRESENTATION VirtualDisplays (Freedom)
+        // because apps there are not tracked by the standard WM task system.
+        AdbLocalClient.executeShell(this,
+                "wm overscan " + CLUSTER_INSET_H + "," + CLUSTER_INSET_V
+                + "," + CLUSTER_INSET_H + "," + CLUSTER_INSET_V
+                + " -d " + displayId);
+        AppLogger.i(TAG, "wm overscan applied on display " + displayId
+                + " inset=" + CLUSTER_INSET_H + "," + CLUSTER_INSET_V);
 
         if (mListener != null) {
             mListener.onClusterDisplayConnected(display, displayId);
