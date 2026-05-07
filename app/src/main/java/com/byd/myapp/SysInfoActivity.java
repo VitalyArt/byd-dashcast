@@ -296,7 +296,7 @@ public class SysInfoActivity extends AppCompatActivity {
             int[] ports = {5037, 5555, 5554};
             for (int port : ports) {
                 boolean open = isPortOpen("127.0.0.1", port, 800);
-                sb.append(String.format("  127.0.0.1:%-5d %s\n",
+                sb.append(String.format(java.util.Locale.US, "  127.0.0.1:%-5d %s\n",
                         port, open ? "OPEN    ✓" : "closed"));
             }
             publishUpdate(sb.toString());

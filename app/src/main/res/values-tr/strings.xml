@@ -188,6 +188,12 @@
     <string name="diag_btn_size_full">FULL TEST</string>
     <string name="diag_btn_reset_main_overscan">⚠️ Ana ekran overscan sıfırla (display 0)</string>
     <string name="diag_reset_main_overscan_done">Display 0 overscan sıfırlandı — wm overscan reset -d 0</string>
+    <!-- Bölüm 7 — DiLink5 Yeniden Boyutlandırma Testi -->
+    <string name="diag_s7_title">7. DiLink5 Yeniden Boyutlandırma Testi (IATM)</string>
+    <string name="diag_s7_desc">DiLink5 Dashboard dizisini test eder: setTaskWindowingMode(4) → setTaskWindowingMode(5) → resizeTask(RESIZE_MODE_FORCED=3) activity_task üzerinde ham Binder ile. Mevcut projeksiyon koduna dokunmaz. Önce ana panel üzerinden cluster’a bir uygulama başlatın.</string>
+    <string name="diag_btn_resize_dilink5_seq">▶ DiLink5 dizisi (WM:4→5 + resize FORCED=3)</string>
+    <string name="diag_btn_resize_forced_only">▶ resizeTask FORCED=3 tek başına (WM değişikliği yok)</string>
+    <string name="diag_btn_resize_inspect_task">🔍 Cluster görevini incele (windowing + bounds)</string>
     <!-- Bölüm 6 — Depolama temizliği -->
     <string name="diag_s6_title">6. Depolama Temizliği</string>
     <string name="diag_s6_desc">DashCast tarafından oluşturulan log ve rapor dosyalarını siler: byd_log_*.log, byd_report_*.txt, BYD_RE_Sniffer_*.txt, cluster_live.png. Bellek log arabellerini de temizler. ADB anahtarları (adb.key / adb.pub) SİLİNMEZ.</string>

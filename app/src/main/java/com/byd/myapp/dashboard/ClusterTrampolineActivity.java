@@ -20,8 +20,7 @@ public class ClusterTrampolineActivity extends Activity {
             // Trigger com.byd.appstartmanagement to spawn the VirtualDisplay natively on the BYD cluster
             Intent launchIntent = new Intent();
             launchIntent.setClassName("com.byd.appstartmanagement", "com.byd.appstartmanagement.frame.AppStartManagement");
-            // Flag 268468224 is equivalent to 0x10008000 = FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TASK
-            launchIntent.addFlags(268468224);
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(launchIntent);
             AppLogger.i(TAG, "Successfully invoked com.byd.appstartmanagement!");
         } catch (Exception e) {

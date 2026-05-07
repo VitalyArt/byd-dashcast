@@ -1255,7 +1255,7 @@ public class MainActivity extends AppCompatActivity
         if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
             AppLogger.d(TAG, "touch → view(" + (int)event.getX() + "," + (int)event.getY()
                     + ") off=(" + (int)offsetX + "," + (int)offsetY + ")"
-                    + " scale=" + String.format("%.3f", scale)
+                    + " scale=" + String.format(java.util.Locale.US, "%.3f", scale)
                     + " cluster=(" + (int)clusterX + "," + (int)clusterY
                     + ")/" + clusterW + "×" + clusterH);
         }

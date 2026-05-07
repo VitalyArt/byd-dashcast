@@ -188,6 +188,12 @@
     <string name="diag_btn_size_full">FULL TEST</string>
     <string name="diag_btn_reset_main_overscan">⚠️ Reset overscan schermo principale (display 0)</string>
     <string name="diag_reset_main_overscan_done">Overscan display 0 reimpostato — wm overscan reset -d 0</string>
+    <!-- Sezione 7 — Test Resize DiLink5 -->
+    <string name="diag_s7_title">7. Test Resize DiLink5 (IATM)</string>
+    <string name="diag_s7_desc">Testa la sequenza DiLink5 Dashboard: setTaskWindowingMode(4) → setTaskWindowingMode(5) → resizeTask(RESIZE_MODE_FORCED=3) tramite Binder grezzo su activity_task. Non modifica il codice di proiezione esistente. Avvia prima un’app sul cluster tramite il pannello principale.</string>
+    <string name="diag_btn_resize_dilink5_seq">▶ Sequenza DiLink5 (WM:4→5 + resize FORCED=3)</string>
+    <string name="diag_btn_resize_forced_only">▶ resizeTask FORCED=3 solo (senza cambio WM)</string>
+    <string name="diag_btn_resize_inspect_task">🔍 Ispeziona task cluster (windowing + bounds)</string>
     <!-- Sezione 6 — Pulizia archivio -->
     <string name="diag_s6_title">6. Pulizia archivio</string>
     <string name="diag_s6_desc">Elimina i file di log e report generati da DashCast: byd_log_*.log, byd_report_*.txt, BYD_RE_Sniffer_*.txt, cluster_live.png. Svuota anche il buffer log in memoria. Le chiavi ADB (adb.key / adb.pub) NON vengono eliminate.</string>

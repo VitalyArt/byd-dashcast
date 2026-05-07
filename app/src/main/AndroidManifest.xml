@@ -91,7 +91,6 @@
         <!-- Welcome screen: language selection (first launch only) -->
         <activity
             android:name=".WelcomeActivity"
-            android:label="@string/app_name"
             android:screenOrientation="landscape"
             android:theme="@style/AppTheme.NoActionBar">
             <intent-filter>
@@ -103,7 +102,6 @@
         <!-- Main 15.6" screen -->
         <activity
             android:name=".MainActivity"
-            android:label="@string/app_name"
             android:screenOrientation="landscape"/>
 
         <!-- Compatibility diagnostic screen -->

@@ -328,7 +328,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         }
                         return;
                     }
-                    launchIntent.addFlags(0x10008000); // NEW_TASK | CLEAR_TASK
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
                     opts.setLaunchDisplayId(displayId);
                     if (displayId > 0) applyClusterFreeformBounds(opts, displayId);
