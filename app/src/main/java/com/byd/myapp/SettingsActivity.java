@@ -1,0 +1,201 @@
+package com.byd.myapp;
+
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.RadioGroup;
+import android.widget.SeekBar;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+/**
+ * User-facing settings screen.
+ *
+ * Currently covers:
+ *  1. Cluster screen type (sendInfo cmd: 29 = 8.8", 30 = 12.3" Seal EU, 31 = 10.25")
+ *  2. Display overscan margins (left/right and top/bottom in pixels)
+ *     Applied via: wm overscan LEFT,TOP,RIGHT,BOTTOM -d <cluster_display_id>
+ */
+public class SettingsActivity extends AppCompatActivity {
+
+    // ── SharedPreferences file (shared with MainActivity / ClusterService) ───
+    static final String PREFS_NAME      = "byd_app_prefs";
+
+    // ── Cluster type ─────────────────────────────────────────────────────────
+    static final String PREF_CLUSTER_TYPE = "cluster_screen_size_cmd";
+    static final int    DEFAULT_CLUSTER_TYPE = 30;      // 12.3" — Seal EU
+
+    // ── Overscan inset ───────────────────────────────────────────────────────
+    public static final String PREF_INSET_H = "overscan_inset_h";
+    public static final String PREF_INSET_V = "overscan_inset_v";
+    public static final int    DEFAULT_INSET_H = 80;
+    public static final int    DEFAULT_INSET_V = 50;
+
+    // ── Views ────────────────────────────────────────────────────────────────
+    private RadioGroup  rgClusterType;
+    private SeekBar     sbInsetH;
+    private SeekBar     sbInsetV;
+    private TextView    tvInsetHValue;
+    private TextView    tvInsetVValue;
+    private Button      btnApply;
+    private Button      btnReset;
+    private TextView    tvResult;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_settings);
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle(getString(R.string.settings_header));
+        }
+
+        bindViews();
+        loadPreferences();
+        wireListeners();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    private void bindViews() {
+        rgClusterType = findViewById(R.id.rg_cluster_type);
+        sbInsetH      = findViewById(R.id.sb_inset_h);
+        sbInsetV      = findViewById(R.id.sb_inset_v);
+        tvInsetHValue = findViewById(R.id.tv_inset_h_value);
+        tvInsetVValue = findViewById(R.id.tv_inset_v_value);
+        btnApply      = findViewById(R.id.btn_apply_overscan);
+        btnReset      = findViewById(R.id.btn_reset_overscan);
+        tvResult      = findViewById(R.id.tv_overscan_result);
+    }
+
+    private void loadPreferences() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        // Cluster type radio
+        int cmd = prefs.getInt(PREF_CLUSTER_TYPE, DEFAULT_CLUSTER_TYPE);
+        switch (cmd) {
+            case 29: rgClusterType.check(R.id.rb_88);   break;
+            case 31: rgClusterType.check(R.id.rb_1025); break;
+            default: rgClusterType.check(R.id.rb_123);  break;  // 30 = Seal EU
+        }
+
+        // Overscan sliders
+        int h = prefs.getInt(PREF_INSET_H, DEFAULT_INSET_H);
+        int v = prefs.getInt(PREF_INSET_V, DEFAULT_INSET_V);
+        sbInsetH.setProgress(h);
+        sbInsetV.setProgress(v);
+        tvInsetHValue.setText(h + " px");
+        tvInsetVValue.setText(v + " px");
+    }
+
+    private void wireListeners() {
+        // Cluster type: save immediately on selection change
+        rgClusterType.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(RadioGroup group, int checkedId) {
+                int cmd = DEFAULT_CLUSTER_TYPE;
+                if      (checkedId == R.id.rb_88)   cmd = 29;
+                else if (checkedId == R.id.rb_123)  cmd = 30;
+                else if (checkedId == R.id.rb_1025) cmd = 31;
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putInt(PREF_CLUSTER_TYPE, cmd).apply();
+                AppLogger.i("SettingsActivity", "cluster type → cmd=" + cmd);
+            }
+        });
+
+        // H slider
+        sbInsetH.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar sb, int value, boolean fromUser) {
+                tvInsetHValue.setText(value + " px");
+                if (fromUser) saveInsets(value, sbInsetV.getProgress());
+            }
+            @Override public void onStartTrackingTouch(SeekBar sb) {}
+            @Override public void onStopTrackingTouch(SeekBar sb) {}
+        });
+
+        // V slider
+        sbInsetV.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar sb, int value, boolean fromUser) {
+                tvInsetVValue.setText(value + " px");
+                if (fromUser) saveInsets(sbInsetH.getProgress(), value);
+            }
+            @Override public void onStartTrackingTouch(SeekBar sb) {}
+            @Override public void onStopTrackingTouch(SeekBar sb) {}
+        });
+
+        // Apply button
+        btnApply.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                applyOverscan();
+            }
+        });
+
+        // Reset button
+        btnReset.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                sbInsetH.setProgress(DEFAULT_INSET_H);
+                sbInsetV.setProgress(DEFAULT_INSET_V);
+                tvInsetHValue.setText(DEFAULT_INSET_H + " px");
+                tvInsetVValue.setText(DEFAULT_INSET_V + " px");
+                saveInsets(DEFAULT_INSET_H, DEFAULT_INSET_V);
+                applyOverscan();
+            }
+        });
+    }
+
+    // ── Logic ─────────────────────────────────────────────────────────────────
+
+    private void saveInsets(int h, int v) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putInt(PREF_INSET_H, h)
+                .putInt(PREF_INSET_V, v)
+                .apply();
+    }
+
+    /**
+     * Sends "wm overscan H,V,H,V -d 1" to the cluster display (display id=1 on BYD Seal EU).
+     * The result is shown in tvResult.
+     */
+    private void applyOverscan() {
+        final int h = sbInsetH.getProgress();
+        final int v = sbInsetV.getProgress();
+        saveInsets(h, v);
+
+        final String cmd = "wm overscan " + h + "," + v + "," + h + "," + v + " -d 1";
+        AppLogger.i("SettingsActivity", "applyOverscan → " + cmd);
+
+        AdbLocalClient.executeShellWithResult(this, cmd, new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String report) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        tvResult.setVisibility(View.VISIBLE);
+                        tvResult.setText(getString(R.string.settings_overscan_applied, h, v));
+                        AppLogger.i("SettingsActivity", "overscan applied OK h=" + h + " v=" + v);
+                    }
+                });
+            }
+            @Override public void onError(String error) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        tvResult.setVisibility(View.VISIBLE);
+                        tvResult.setText("❌ " + error.trim());
+                        AppLogger.e("SettingsActivity", "overscan error: " + error);
+                    }
+                });
+            }
+        });
+    }
+}

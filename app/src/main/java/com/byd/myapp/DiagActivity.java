@@ -2,7 +2,6 @@ package com.byd.myapp;
 
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.Parcel;
 import android.view.Surface;
 import androidx.appcompat.app.AppCompatActivity;
 import android.view.View;
@@ -40,6 +39,9 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnDisplaySizeRestore;  // restore
     private Button   btnDisplaySizeFull;     // full diagnostic
     private Button   btnDisplaySizeShare;
+    private Button   btnResetMainOverscan;   // safety: reset wm overscan on display 0
+    private TextView tvResetMainOverscanResult;
+
 
     // [4] Analyses Système
     private Button   btnDumpSfMirror;
@@ -69,7 +71,6 @@ public class DiagActivity extends AppCompatActivity {
     private Button        btnFissionLaunch;
     private TextView      tvFissionResult;
     private int           mFissionDisplayId = -1;
-    private VirtualDisplay mClusterVirtualDisplay = null;
 
     private Button   btnReSnifferStart;
     private Button   btnReSnifferStop;
@@ -77,6 +78,16 @@ public class DiagActivity extends AppCompatActivity {
     private Button   btnReSnifferExport;
     private TextView tvReSnifferStatus;
     private java.io.File mReSnifferFile = null;
+
+    // [7] Test resize DiLink5
+    private Button   btnResizeDilink5Seq;
+    private Button   btnResizeForcedOnly;
+    private Button   btnResizeInspectTask;
+    private TextView tvResizeDiagResult;
+
+    // [6] Nettoyage stockage
+    private Button   btnCleanupFiles;
+    private TextView tvCleanupResult;
 
     @Override
     protected void attachBaseContext(android.content.Context base) {
@@ -107,6 +118,12 @@ public class DiagActivity extends AppCompatActivity {
         btnDisplaySizeRestore  = (Button)   findViewById(R.id.btn_display_size_restore);
         btnDisplaySizeFull     = (Button)   findViewById(R.id.btn_display_size_full);
         btnDisplaySizeShare    = (Button)   findViewById(R.id.btn_display_size_share);
+
+        btnResetMainOverscan       = (Button)   findViewById(R.id.btn_reset_main_overscan);
+        tvResetMainOverscanResult  = (TextView) findViewById(R.id.tv_reset_main_overscan_result);
+        btnResetMainOverscan.setOnClickListener(v -> resetMainDisplayOverscan());
+
+
 
         btnDumpSfMirror = (Button) findViewById(R.id.btn_dump_sf_mirror);
         tvSfDumpResult = (TextView) findViewById(R.id.tv_sf_dump_result);
@@ -145,6 +162,21 @@ public class DiagActivity extends AppCompatActivity {
         btnReSnifferExport   = (Button)   findViewById(R.id.btn_re_sniffer_export);
         tvReSnifferStatus    = (TextView) findViewById(R.id.tv_re_sniffer_status);
         tvReSnifferStatus.setTag("RE Sniffer");
+
+        // [7] Test resize DiLink5
+        btnResizeDilink5Seq   = (Button)   findViewById(R.id.btn_resize_dilink5_seq);
+        btnResizeForcedOnly   = (Button)   findViewById(R.id.btn_resize_forced_only);
+        btnResizeInspectTask  = (Button)   findViewById(R.id.btn_resize_inspect_task);
+        tvResizeDiagResult    = (TextView) findViewById(R.id.tv_resize_diag_result);
+        tvResizeDiagResult.setTag("Resize DiLink5");
+        btnResizeDilink5Seq  .setOnClickListener(v -> runResizeDilink5Seq());
+        btnResizeForcedOnly  .setOnClickListener(v -> runResizeForcedOnly());
+        btnResizeInspectTask .setOnClickListener(v -> runResizeInspectTask());
+
+        // [6] Nettoyage stockage
+        btnCleanupFiles = (Button)   findViewById(R.id.btn_cleanup_files);
+        tvCleanupResult = (TextView) findViewById(R.id.tv_cleanup_result);
+        btnCleanupFiles.setOnClickListener(v -> cleanupFilesAction());
 
         btnReSnifferStart   .setOnClickListener(v -> startReSniffer());
         btnReSnifferStop    .setOnClickListener(v -> stopReSniffer());
@@ -411,7 +443,7 @@ public class DiagActivity extends AppCompatActivity {
     private static final String AUTO_DISPLAY_SVC = AUTO_DISPLAY_PKG + "/.AutoDisplayService";
 
     private void startAutoDisplayService() {
-        tvAutoDisplayResult.setText("Démarrage via ADB...");
+        tvAutoDisplayResult.setText(getString(R.string.diag_auto_starting));
         tvAutoDisplayResult.setTextColor(0xFFFFAB40);
         btnAutoDisplayStart.setEnabled(false);
 
@@ -448,14 +480,14 @@ public class DiagActivity extends AppCompatActivity {
     }
 
     private void stopAutoDisplayService() {
-        tvAutoDisplayResult.setText("Arrêt via ADB...");
+        tvAutoDisplayResult.setText(getString(R.string.diag_auto_stopping));
         tvAutoDisplayResult.setTextColor(0xFFFFAB40);
         AdbLocalClient.executeShellWithResult(this,
                 "am stopservice " + AUTO_DISPLAY_SVC + " 2>&1",
                 new AdbLocalClient.Callback() {
             @Override public void onSuccess(String report) {
                 runOnUiThread(() -> {
-                    tvAutoDisplayResult.setText("STOP: " + report.trim());
+                    tvAutoDisplayResult.setText(getString(R.string.diag_auto_stopped, report.trim()));
                     tvAutoDisplayResult.setTextColor(0xFFFF5252);
                 });
             }
@@ -502,7 +534,7 @@ public class DiagActivity extends AppCompatActivity {
         AdbLocalClient.sendInfo(this, 1000, 16, "", new AdbLocalClient.Callback() {
             @Override
             public void onSuccess(String ignored) {
-                runOnUiThread(() -> tvTest13Result.setText("Display released. Probing JNI..."));
+                runOnUiThread(() -> tvTest13Result.setText(getString(R.string.diag_jni_display_released)));
                 new Thread(() -> {
                     try {
                         Thread.sleep(1000);
@@ -534,7 +566,7 @@ public class DiagActivity extends AppCompatActivity {
                     } catch (Exception e) {
                         AppLogger.e("DiagJNI", "Exception", e);
                         runOnUiThread(() -> {
-                            tvTest13Result.setText("FATAL: " + e.getMessage());
+                            tvTest13Result.setText(getString(R.string.diag_jni_fatal, e.getMessage()));
                             btnTest13.setEnabled(true);
                         });
                     }
@@ -544,7 +576,7 @@ public class DiagActivity extends AppCompatActivity {
             @Override
             public void onError(String e) {
                 runOnUiThread(() -> {
-                    tvTest13Result.setText("Failed to send 16: " + e);
+                    tvTest13Result.setText(getString(R.string.diag_jni_send16_failed, e));
                     btnTest13.setEnabled(true);
                 });
             }
@@ -562,12 +594,12 @@ public class DiagActivity extends AppCompatActivity {
             @Override public void onSuccess(String r) { out[0] = r.trim(); l.countDown(); }
             @Override public void onError(String e)   { out[0] = "ERR:" + e; l.countDown(); }
         });
-        try { l.await(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        try { l.await(5, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         return out[0];
     }
 
     private void runStartAndProbe() {
-        tvTest13Result.setText("Diagnostic en cours...");
+        tvTest13Result.setText(getString(R.string.diag_running));
         btnJniStartProbe.setEnabled(false);
         btnTest13.setEnabled(false);
 
@@ -640,7 +672,7 @@ public class DiagActivity extends AppCompatActivity {
     // TEST 15 : Dumpsys window displays
     // -------------------------------------------------------------------------
     private void runDumpsysWindows() {
-        tvDumpsysResult.setText("Execution via adb local...");
+        tvDumpsysResult.setText(getString(R.string.diag_dumpsys_running));
         btnDumpsysWindows.setEnabled(false);
         AdbLocalClient.executeShellWithResult(this, "dumpsys window displays", new AdbLocalClient.Callback() {
             @Override
@@ -654,7 +686,7 @@ public class DiagActivity extends AppCompatActivity {
             @Override
             public void onError(final String error) {
                 runOnUiThread(() -> {
-                    tvDumpsysResult.setText("ERREUR:\n" + error);
+                    tvDumpsysResult.setText(getString(R.string.diag_dumpsys_error, error));
                     btnDumpsysWindows.setEnabled(true);
                 });
             }
@@ -664,13 +696,13 @@ public class DiagActivity extends AppCompatActivity {
     private static final long DAEMON_TIMEOUT_MS = 15_000;
 
     private void runDaemonVdTest() {
-        tvDaemonVdResult.setText("Lancement du daemon via adb local...");
+        tvDaemonVdResult.setText(getString(R.string.diag_daemon_launching));
         btnDaemonVdTest.setEnabled(false);
 
         // Timeout de sécurité : réactive le bouton si ADB ne répond pas dans les 15s
         android.os.Handler timeoutHandler = new android.os.Handler(android.os.Looper.getMainLooper());
         Runnable timeoutAction = () -> {
-            tvDaemonVdResult.setText("TIMEOUT : ADB n'a pas répondu dans " + (DAEMON_TIMEOUT_MS / 1000) + "s.");
+            tvDaemonVdResult.setText(getString(R.string.diag_daemon_timeout, (int)(DAEMON_TIMEOUT_MS / 1000)));
             btnDaemonVdTest.setEnabled(true);
         };
         timeoutHandler.postDelayed(timeoutAction, DAEMON_TIMEOUT_MS);
@@ -683,7 +715,7 @@ public class DiagActivity extends AppCompatActivity {
                 public void onSuccess(final String report) {
                     timeoutHandler.removeCallbacks(timeoutAction);
                     runOnUiThread(() -> {
-                        tvDaemonVdResult.setText("DAEMON OUTPUT: " + report);
+                        tvDaemonVdResult.setText(getString(R.string.diag_daemon_output, report));
                         btnDaemonVdTest.setEnabled(true);
                     });
                 }
@@ -691,14 +723,14 @@ public class DiagActivity extends AppCompatActivity {
                 public void onError(final String error) {
                     timeoutHandler.removeCallbacks(timeoutAction);
                     runOnUiThread(() -> {
-                        tvDaemonVdResult.setText("ERREUR: " + error);
+                        tvDaemonVdResult.setText(getString(R.string.diag_daemon_error, error));
                         btnDaemonVdTest.setEnabled(true);
                     });
                 }
             });
         } catch (Exception e) {
             timeoutHandler.removeCallbacks(timeoutAction);
-            tvDaemonVdResult.setText("Erreur APK path: " + e.getMessage());
+            tvDaemonVdResult.setText(getString(R.string.diag_apk_path_error, e.getMessage()));
             btnDaemonVdTest.setEnabled(true);
         }
     }
@@ -717,7 +749,7 @@ public class DiagActivity extends AppCompatActivity {
 
     private void runFissionViaBinder() {
         if (tvFissionResult == null) return;
-        tvFissionResult.setText("sendInfo Java direct...");
+        tvFissionResult.setText(getString(R.string.diag_fission_binder_starting));
         btnFissionViaBinder.setEnabled(false);
         btnFissionLaunch.setEnabled(false);
         mFissionDisplayId = -1;
@@ -853,7 +885,7 @@ public class DiagActivity extends AppCompatActivity {
     // =========================================================================
 
     private void runFissionPipeline() {
-        tvFissionResult.setText("Séquence en cours...");
+        tvFissionResult.setText(getString(R.string.diag_fission_running));
         btnFissionPipeline.setEnabled(false);
         btnFissionLaunch.setEnabled(false);
         mFissionDisplayId = -1;
@@ -943,34 +975,12 @@ public class DiagActivity extends AppCompatActivity {
         }).start();
     }
 
-    /**
-     * Parse la sortie de "dumpsys display | grep -E 'mDisplayId|mName'"
-     * et retourne le displayId du premier display dont le nom contient nameContains.
-     * Format attendu (l'ID précède toujours le nom) :
-     *   mDisplayId=4
-     *   mName=fission_testVirtualSurface
-     */
-    private int parseDisplayIdByName(String output, String nameContains) {
-        int lastId = -1;
-        for (String line : output.split("\n")) {
-            String t = line.trim();
-            if (t.startsWith("mDisplayId=")) {
-                try {
-                    lastId = Integer.parseInt(t.substring("mDisplayId=".length()).trim());
-                } catch (NumberFormatException ignored) {}
-            } else if (t.startsWith("mName=") && t.contains(nameContains)) {
-                return lastId;
-            }
-        }
-        return -1;
-    }
-
     private void launchOnFissionDisplay() {
         if (mFissionDisplayId == -1) {
-            tvFissionResult.setText("❌ Pas de display fission. Lancer d'abord \"Créer Fission Display\".");
+            tvFissionResult.setText(getString(R.string.diag_fission_no_display));
             return;
         }
-        tvFissionResult.setText("Lancement sur display " + mFissionDisplayId + "...");
+        tvFissionResult.setText(getString(R.string.diag_fission_launching, mFissionDisplayId));
         btnFissionLaunch.setEnabled(false);
 
         new Thread(() -> {
@@ -1010,7 +1020,8 @@ public class DiagActivity extends AppCompatActivity {
         TextView[] results = {
             tvAdbLocalResult, tvDaemonVdResult, tvDisplaySizeResult,
             tvDisplay1Result, tvDumpsysResult, tvTest13Result, tvSfDumpResult,
-            tvAutoDisplayResult, tvFissionResult, tvReSnifferStatus
+            tvAutoDisplayResult, tvFissionResult, tvReSnifferStatus,
+            tvResizeDiagResult
         };
         for (TextView tv : results) {
             if (tv == null) continue;
@@ -1019,7 +1030,7 @@ public class DiagActivity extends AppCompatActivity {
                 String text = tv.getText().toString().trim();
                 if (text.isEmpty() || text.equals("--")) {
                     android.widget.Toast.makeText(this,
-                            "Pas de résultat à partager.",
+                            getString(R.string.toast_no_result_to_share),
                             android.widget.Toast.LENGTH_SHORT).show();
                     return true;
                 }
@@ -1070,7 +1081,7 @@ public class DiagActivity extends AppCompatActivity {
         AppLogger.i("RESniffer", "Starting RE Sniffer → " + p);
 
         runOnUiThread(() -> {
-            tvReSnifferStatus.setText("Initialisation...");
+            tvReSnifferStatus.setText(getString(R.string.diag_sniffer_initializing));
             tvReSnifferStatus.setTextColor(0xFFFFAB40);
         });
 
@@ -1131,16 +1142,16 @@ public class DiagActivity extends AppCompatActivity {
                 AdbLocalClient.executeShell(DiagActivity.this, bgCmd);
 
                 runOnUiThread(() -> {
-                    tvReSnifferStatus.setText("ACTIF → " + mReSnifferFile.getName());
+                    tvReSnifferStatus.setText(getString(R.string.diag_sniffer_active, mReSnifferFile.getName()));
                     tvReSnifferStatus.setTextColor(0xFF69F0AE);
                     android.widget.Toast.makeText(DiagActivity.this,
-                            "Sniffer démarré : " + mReSnifferFile.getName(),
+                            getString(R.string.toast_sniffer_started, mReSnifferFile.getName()),
                             android.widget.Toast.LENGTH_LONG).show();
                 });
             }
             @Override public void onError(String err) {
                 runOnUiThread(() -> {
-                    tvReSnifferStatus.setText("❌ Échec init: " + err);
+                    tvReSnifferStatus.setText(getString(R.string.diag_sniffer_init_failed, err));
                     tvReSnifferStatus.setTextColor(0xFFFF5252);
                 });
             }
@@ -1169,15 +1180,15 @@ public class DiagActivity extends AppCompatActivity {
                     "echo '[RE Sniffer] Stopped.' >> " + mReSnifferFile.getAbsolutePath());
         }
         runOnUiThread(() -> {
-            tvReSnifferStatus.setText("Arrêté — fichier : " + fileName);
+            tvReSnifferStatus.setText(getString(R.string.diag_sniffer_stopped, fileName));
             tvReSnifferStatus.setTextColor(0xFFFF5252);
-            android.widget.Toast.makeText(this, "Sniffer arrêté.", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, getString(R.string.toast_sniffer_stopped), android.widget.Toast.LENGTH_SHORT).show();
         });
     }
 
     private void snapshotReSniffer() {
         if (mReSnifferFile == null) {
-            android.widget.Toast.makeText(this, "Démarrer le sniffer d'abord.", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, getString(R.string.toast_sniffer_start_first), android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
         final String p = mReSnifferFile.getAbsolutePath();
@@ -1195,13 +1206,13 @@ public class DiagActivity extends AppCompatActivity {
             + " && echo '--- BROADCASTS ---' >> " + p
             + " && dumpsys activity broadcasts history 2>/dev/null >> " + p;
         AdbLocalClient.executeShell(this, cmd);
-        android.widget.Toast.makeText(this, "Snapshot injecté dans le fichier.", android.widget.Toast.LENGTH_SHORT).show();
+        android.widget.Toast.makeText(this, getString(R.string.toast_snapshot_done), android.widget.Toast.LENGTH_SHORT).show();
     }
 
     private void exportReSniffer() {
         java.io.File logFile = mReSnifferFile;
         if (logFile == null || !logFile.exists() || logFile.length() == 0) {
-            android.widget.Toast.makeText(this, "Aucun fichier sniffer à exporter.", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, getString(R.string.toast_sniffer_no_file), android.widget.Toast.LENGTH_SHORT).show();
             return;
         }
         try {
@@ -1216,5 +1227,280 @@ public class DiagActivity extends AppCompatActivity {
         } catch (Exception e) {
             AppLogger.e("RESniffer", "Export erreur", e);
         }
+    }
+
+    private void resetMainDisplayOverscan() {
+        btnResetMainOverscan.setEnabled(false);
+        AdbLocalClient.executeShellWithResult(this, "wm overscan reset -d 0",
+                new AdbLocalClient.Callback() {
+            @Override public void onSuccess(String result) {
+                runOnUiThread(() -> {
+                    btnResetMainOverscan.setEnabled(true);
+                    tvResetMainOverscanResult.setText(
+                            getString(R.string.diag_reset_main_overscan_done));
+                    AppLogger.i("Overscan", "reset -d 0 OK: " + result.trim());
+                });
+            }
+            @Override public void onError(String error) {
+                runOnUiThread(() -> {
+                    btnResetMainOverscan.setEnabled(true);
+                    tvResetMainOverscanResult.setText("ERROR: " + error.trim());
+                    AppLogger.e("Overscan", "reset -d 0 FAILED: " + error);
+                });
+            }
+        });
+    }
+
+    // =========================================================================
+    // SECTION 7 — TEST RESIZE DILINK5
+    // Teste la séquence exacte découverte dans DiLink5 Dashboard c0/k.java o() :
+    //   q(taskId, 4) → setTaskWindowingMode(SPLIT_SCREEN_SECONDARY)
+    //   r(taskId, 5) → setTaskWindowingMode(FREEFORM)
+    //   o(taskId, l, t, r, b) → raw Binder TRANSACTION_resizeTask + RESIZE_MODE_FORCED=3
+    // SANS toucher au code de projection existant (ClusterService inchangé).
+    // =========================================================================
+
+    /** Trouve le taskId de l'app actuellement sur le cluster (display != 0). */
+    private int findClusterTaskId() {
+        // RunningTaskInfo.displayId n'existe pas sur API 29 → on passe par reflection sur IATM
+        try {
+            Class<?> atmCls = Class.forName("android.app.ActivityTaskManager");
+            Object iatm = atmCls.getMethod("getService").invoke(null);
+            // getTasks(maxNum, filterOnlyVisibleRecents, keepIntentExtra)
+            java.util.List<?> tasks = (java.util.List<?>)
+                    iatm.getClass().getMethod("getTasks", int.class).invoke(iatm, 30);
+            if (tasks == null) return -1;
+            for (Object t : tasks) {
+                // ActivityManager.RunningTaskInfo (base class) has displayId since API 29 hidden
+                java.lang.reflect.Field dispField = null;
+                try { dispField = t.getClass().getField("displayId"); } catch (NoSuchFieldException e2) {
+                    try { dispField = t.getClass().getSuperclass().getField("displayId"); } catch (Exception e3) {}
+                }
+                if (dispField == null) continue;
+                int dId = (int) dispField.get(t);
+                if (dId != 0) {
+                    java.lang.reflect.Field idField = t.getClass().getField("taskId");
+                    return (int) idField.get(t);
+                }
+            }
+        } catch (Exception e) {
+            AppLogger.w("ResizeDiag", "findClusterTaskId via reflection: " + e.getMessage());
+        }
+        // Fallback : shell am stack list
+        String out = shellSync("am stack list 2>/dev/null | grep -E 'displayId=[^0]' | grep -oE 'taskId=[0-9]+' | head -1");
+        if (!out.isEmpty() && out.contains("taskId=")) {
+            try { return Integer.parseInt(out.replace("taskId=", "").trim()); } catch (NumberFormatException ignored) {}
+        }
+        return -1;
+    }
+
+    /**
+     * Séquence complète DiLink5 :
+     *   setTaskWindowingMode(taskId, 4, true)  [SPLIT_SCREEN_SECONDARY]
+     *   setTaskWindowingMode(taskId, 5, true)  [FREEFORM]
+     *   resizeTask(taskId, bounds, 3)           [RESIZE_MODE_FORCED]
+     */
+    private void runResizeDilink5Seq() {
+        tvResizeDiagResult.setText("En cours…");
+        btnResizeDilink5Seq.setEnabled(false);
+        btnResizeForcedOnly.setEnabled(false);
+
+        new Thread(() -> {
+            StringBuilder sb = new StringBuilder();
+            sb.append("── Séquence DiLink5 : WM(4)→WM(5)→resize FORCED=3 ──\n\n");
+
+            // 1. Trouver la task cluster
+            int taskId = findClusterTaskId();
+            sb.append("Task cluster : ").append(taskId == -1 ? "❌ non trouvée (aucune app sur cluster)" : "taskId=" + taskId).append("\n");
+            if (taskId == -1) {
+                final String out = sb.toString();
+                runOnUiThread(() -> { tvResizeDiagResult.setText(out); btnResizeDilink5Seq.setEnabled(true); btnResizeForcedOnly.setEnabled(true); });
+                return;
+            }
+
+            // 2. Obtenir le service IATM
+            Object iatm = null;
+            try {
+                Class<?> atmCls = Class.forName("android.app.ActivityTaskManager");
+                iatm = atmCls.getMethod("getService").invoke(null);
+                sb.append("IATM getService : ✅\n");
+            } catch (Exception e) {
+                sb.append("IATM getService : ❌ ").append(e.getMessage()).append("\n");
+            }
+
+            if (iatm != null) {
+                Class<?> iatmCls = iatm.getClass();
+
+                // 3. setTaskWindowingMode(taskId, 4, true) — SPLIT_SCREEN_SECONDARY
+                try {
+                    iatmCls.getMethod("setTaskWindowingMode", int.class, int.class, boolean.class)
+                            .invoke(iatm, taskId, 4, true);
+                    sb.append("setTaskWindowingMode(4=SPLIT_SCREEN_SECONDARY) : ✅\n");
+                } catch (Exception e) {
+                    sb.append("setTaskWindowingMode(4) : ❌ ").append(e.getMessage()).append("\n");
+                }
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+
+                // 4. setTaskWindowingMode(taskId, 5, true) — FREEFORM
+                try {
+                    iatmCls.getMethod("setTaskWindowingMode", int.class, int.class, boolean.class)
+                            .invoke(iatm, taskId, 5, true);
+                    sb.append("setTaskWindowingMode(5=FREEFORM) : ✅\n");
+                } catch (Exception e) {
+                    sb.append("setTaskWindowingMode(5) : ❌ ").append(e.getMessage()).append("\n");
+                }
+                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+
+                // 5. resizeTask(taskId, bounds, 3=RESIZE_MODE_FORCED)
+                try {
+                    android.graphics.Rect bounds = new android.graphics.Rect(0, 0, 1920, 720);
+                    iatmCls.getMethod("resizeTask", int.class, android.graphics.Rect.class, int.class)
+                            .invoke(iatm, taskId, bounds, 3);
+                    sb.append("resizeTask(").append(bounds).append(", FORCED=3) : ✅\n");
+                } catch (Exception e) {
+                    sb.append("resizeTask(FORCED=3) : ❌ ").append(e.getMessage()).append("\n");
+                }
+            }
+
+            // 6. Dump état après
+            sb.append("\n── État task après ──\n");
+            String dump = shellSync("am stack list 2>/dev/null | grep -A3 'taskId=" + taskId + "'");
+            sb.append(dump.isEmpty() ? "(pas de résultat am stack list)" : dump).append("\n");
+
+            AppLogger.i("ResizeDiag", sb.toString());
+            final String out = sb.toString();
+            runOnUiThread(() -> {
+                tvResizeDiagResult.setText(out);
+                btnResizeDilink5Seq.setEnabled(true);
+                btnResizeForcedOnly.setEnabled(true);
+            });
+        }, "resize-dilink5-thread").start();
+    }
+
+    /**
+     * resizeTask seul avec RESIZE_MODE_FORCED=3, sans changer le windowing mode.
+     * Permet de tester si le problème vient du resizeMode ou du windowing mode.
+     */
+    private void runResizeForcedOnly() {
+        tvResizeDiagResult.setText("En cours…");
+        btnResizeDilink5Seq.setEnabled(false);
+        btnResizeForcedOnly.setEnabled(false);
+
+        new Thread(() -> {
+            StringBuilder sb = new StringBuilder();
+            sb.append("── resizeTask FORCED=3 seul (sans WM change) ──\n\n");
+
+            int taskId = findClusterTaskId();
+            sb.append("Task cluster : ").append(taskId == -1 ? "❌ non trouvée" : "taskId=" + taskId).append("\n");
+            if (taskId == -1) {
+                final String out = sb.toString();
+                runOnUiThread(() -> { tvResizeDiagResult.setText(out); btnResizeDilink5Seq.setEnabled(true); btnResizeForcedOnly.setEnabled(true); });
+                return;
+            }
+
+            try {
+                Class<?> atmCls = Class.forName("android.app.ActivityTaskManager");
+                Object iatm = atmCls.getMethod("getService").invoke(null);
+                android.graphics.Rect bounds = new android.graphics.Rect(0, 0, 1920, 720);
+                iatm.getClass().getMethod("resizeTask", int.class, android.graphics.Rect.class, int.class)
+                        .invoke(iatm, taskId, bounds, 3);
+                sb.append("resizeTask(").append(bounds).append(", FORCED=3) : ✅\n");
+            } catch (Exception e) {
+                sb.append("resizeTask(FORCED=3) : ❌ ").append(e.getMessage()).append("\n");
+            }
+
+            AppLogger.i("ResizeDiag", sb.toString());
+            final String out = sb.toString();
+            runOnUiThread(() -> {
+                tvResizeDiagResult.setText(out);
+                btnResizeDilink5Seq.setEnabled(true);
+                btnResizeForcedOnly.setEnabled(true);
+            });
+        }, "resize-forced-thread").start();
+    }
+
+    /**
+     * Inspecte la task actuellement sur le cluster : windowing mode, stackId, bounds.
+     * Utilise am stack list + am task info (shell) sans modifier quoi que ce soit.
+     */
+    private void runResizeInspectTask() {
+        tvResizeDiagResult.setText("Inspection en cours…");
+        btnResizeInspectTask.setEnabled(false);
+
+        new Thread(() -> {
+            StringBuilder sb = new StringBuilder();
+
+            // Trouver task sur display != 0
+            int taskId = findClusterTaskId();
+            sb.append("Task sur cluster : ");
+            if (taskId == -1) {
+                sb.append("❌ aucune (lancez une app sur le cluster d'abord)\n");
+            } else {
+                sb.append("taskId=").append(taskId).append("\n");
+            }
+            sb.append("\n");
+
+            // am stack list — overview de toutes les stacks + tasks
+            sb.append("── am stack list ──\n");
+            String stacks = shellSync("am stack list 2>/dev/null");
+            sb.append(stacks.isEmpty() ? "(vide)" : stacks).append("\n\n");
+
+            // dumpsys activity activities — windowing mode + bounds + displayId
+            sb.append("── activities (display != 0) ──\n");
+            String acts = shellSync("dumpsys activity activities 2>/dev/null | grep -E 'displayId|windowingMode|Bounds|taskId|realActivity' | grep -v 'displayId=0' | head -40");
+            sb.append(acts.isEmpty() ? "(aucun résultat)" : acts).append("\n\n");
+
+            // getTaskBounds via IATM reflection si taskId connu
+            if (taskId != -1) {
+                sb.append("── IATM.getTaskBounds(taskId=").append(taskId).append(") ──\n");
+                try {
+                    Class<?> atmCls = Class.forName("android.app.ActivityTaskManager");
+                    Object iatm = atmCls.getMethod("getService").invoke(null);
+                    Object bounds = iatm.getClass().getMethod("getTaskBounds", int.class)
+                            .invoke(iatm, taskId);
+                    sb.append("bounds=" + bounds).append("\n");
+                } catch (Exception e) {
+                    sb.append("❌ " + e.getMessage()).append("\n");
+                }
+            }
+
+            AppLogger.i("ResizeDiag", sb.toString());
+            final String out = sb.toString();
+            runOnUiThread(() -> {
+                tvResizeDiagResult.setText(out);
+                btnResizeInspectTask.setEnabled(true);
+            });
+        }, "resize-inspect-thread").start();
+    }
+
+    private void cleanupFilesAction() {
+        btnCleanupFiles.setEnabled(false);
+        tvCleanupResult.setText(getString(R.string.diag_cleanup_running));
+        new Thread(() -> {
+            int deleted = AppLogger.cleanupFiles(DiagActivity.this);
+            // Measure remaining storage usage after cleanup
+            long usedBytes = 0;
+            java.io.File extDir = getExternalFilesDir(null);
+            if (extDir != null && extDir.exists()) {
+                java.io.File[] files = extDir.listFiles();
+                if (files != null) for (java.io.File f : files) usedBytes += f.length();
+            }
+            java.io.File extCache = getExternalCacheDir();
+            if (extCache != null && extCache.exists()) {
+                java.io.File[] files = extCache.listFiles();
+                if (files != null) for (java.io.File f : files) usedBytes += f.length();
+            }
+            final int finalDeleted = deleted;
+            final String sizeStr = usedBytes < 1024
+                    ? usedBytes + " B"
+                    : usedBytes < 1024 * 1024
+                            ? (usedBytes / 1024) + " KB"
+                            : String.format(java.util.Locale.US, "%.1f MB", usedBytes / 1048576.0);
+            runOnUiThread(() -> {
+                btnCleanupFiles.setEnabled(true);
+                tvCleanupResult.setText(getString(R.string.diag_cleanup_done, finalDeleted, sizeStr));
+                AppLogger.i("Cleanup", finalDeleted + " file(s) deleted, remaining: " + sizeStr);
+            });
+        }, "cleanup-thread").start();
     }
 }

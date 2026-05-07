@@ -67,12 +67,12 @@ public class MainActivity extends AppCompatActivity
     private static final String PREFS_NAME         = "byd_app_prefs";
     /** Package of the app sent to the main display — persisted to survive Activity recreation */
     private static final String PREF_MAIN_PKG      = "main_display_pkg";
+    /** Package/name of the app currently active on the cluster — persisted to survive Activity recreation */
+    private static final String PREF_CLUSTER_PKG   = "cluster_active_pkg";
+    private static final String PREF_CLUSTER_NAME  = "cluster_active_name";
     /** sendInfo code for cluster screen size: 29=8.8", 30=12.3" (default Seal EU), 31=10.25" */
     private static final String PREF_CLUSTER_TYPE  = "cluster_screen_size_cmd";
     private static final int    CLUSTER_TYPE_DEFAULT = 30;
-    // App waiting to be sent during cluster auto-activation
-    private String mPendingLaunchPackage = null;
-
     private final ServiceConnection mServiceConn = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -91,9 +91,10 @@ public class MainActivity extends AppCompatActivity
             // Without this, onSendToDashboard() would think the cluster is available and would call
             // mClusterService.launchOnDashboard() → NullPointerException.
             if (mDashboardLauncher != null) mDashboardLauncher.setDashboardDisplayId(-1);
+            stopTrackingApp();
             mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+            mCurrentDashboardPkg = null;
+            btnActivateCluster.setEnabled(true);
             mMainDisplayPkg      = null;
             clearSplitState();
             if (mAdapter != null) mAdapter.setCurrentPackage(null);
@@ -108,6 +109,15 @@ public class MainActivity extends AppCompatActivity
     private int    mCurrentSplitSlot    = 0;      // 0=full screen, 1=left, 2=right
     private String mMainDisplayPkg      = null;   // package sent to the main display (button "→ Cluster")
 
+    // External process-death detection.
+    // Primary: OnUidImportanceListener (event-driven, via reflection — may be unsupported on DiLink).
+    // Fallback: /proc watchdog (2 s polling, no permissions needed, always reliable).
+    private Object   mUidImportanceListener = null;
+    private String   mWatchdogPkg           = null;
+    private int      mWatchdogPid           = -1;  // cached PID — avoids full /proc scan each tick
+    private Runnable mWatchdogRunnable       = null;
+    private static final int WATCHDOG_INTERVAL_MS = 2000;
+
     // UI — barre statut
     private TextView tvDashboardStatus;
     private TextView     tvAppListTitle;
@@ -115,6 +125,7 @@ public class MainActivity extends AppCompatActivity
     private Button   btnRestoreCluster;
     private Button   btnOriginCluster;
     private Button   btnOverflow;
+    private Button   btnShowMirror;
     private Button   btnSplitLayout;
     private RecyclerView rvApps;
     private AppListAdapter mAdapter;
@@ -132,6 +143,17 @@ public class MainActivity extends AppCompatActivity
 
     // Screenshot mirror loop (fallback when SurfaceControl.createDisplay() fails)
     private final Handler  mScreenshotHandler  = new Handler(Looper.getMainLooper());
+
+    // Receiver for FloatingRemoteButton tap → open mirror panel from overlay
+    private final BroadcastReceiver mShowMirrorReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (mCurrentDashboardApp == null) return; // no app on cluster
+            showMirrorView();
+            attemptStartMirrorWithCurrentHolder();
+            AppLogger.d(TAG, "mShowMirrorReceiver → showMirrorView");
+        }
+    };
 
     // MirrorDaemon — Binder received via broadcast ACTION_DAEMON_READY
     private IBinder mDaemonBinder = null;
@@ -177,23 +199,24 @@ public class MainActivity extends AppCompatActivity
         // Must be called before any call to ClusterMirrorManager.startMirror(this, ).
         // Same mechanism as WindowManagement v1.2 (VMRuntime.setHiddenApiExemptions).
         com.byd.myapp.dashboard.ClusterMirrorManager.unlockHiddenApis();
-        // Floating LOG button — debug only (absent in release)
-        if (BuildConfig.DEBUG) {
-            startService(new Intent(this, FloatingLogButton.class));
-        }
 
         // Receiver to retrieve the MirrorDaemon Binder (uid=2000)
         registerReceiver(mDaemonReadyReceiver,
                 new IntentFilter(com.byd.myapp.daemon.MirrorDaemon.ACTION_DAEMON_READY));
-        
-        // Floating "GPS" button to quickly reopen Waze streaming
+
+        // Floating 📺 mirror button — started once, visibility controlled by show()/hide()
         startService(new Intent(this, FloatingRemoteButton.class));
+
+        // Handle a tap on the floating button when the Activity is already alive
+        // (Activity exists in back stack → onNewIntent fires instead of onCreate)
+        handleShowMirrorIntent(getIntent());
 
         tvDashboardStatus   = (TextView) findViewById(R.id.tv_dashboard_status);
         btnActivateCluster  = (Button)   findViewById(R.id.btn_activate_cluster);
         btnRestoreCluster   = (Button)   findViewById(R.id.btn_restore_cluster);
         btnOriginCluster    = (Button)   findViewById(R.id.btn_origin_cluster);
         btnOverflow         = (Button)   findViewById(R.id.btn_overflow);
+        btnShowMirror       = (Button)   findViewById(R.id.btn_show_mirror);
         rvApps             = (RecyclerView) findViewById(R.id.rv_apps);
 
         // App list
@@ -224,6 +247,16 @@ public class MainActivity extends AppCompatActivity
             @Override
             public void onClick(View v) {
                 showOverflowMenu(v);
+            }
+        });
+
+        // Button 📺 Mirror — reopen the mirror+tactile panel for the app running on the cluster
+        btnShowMirror.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showMirrorView();
+                attemptStartMirrorWithCurrentHolder();
+                AppLogger.d(TAG, "btn_show_mirror → showMirrorView for " + mCurrentDashboardApp);
             }
         });
 
@@ -289,15 +322,6 @@ public class MainActivity extends AppCompatActivity
             }
         });
 
-        // Temporary floating keyboard
-        Button btnClusterKeyboard = (Button) findViewById(R.id.btn_cluster_keyboard);
-        btnClusterKeyboard.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showKeyboardDialog();
-            }
-        });
-
         // Split button — cluster layout (full screen / left 50% / right 50%)
         btnSplitLayout = (Button) findViewById(R.id.btn_cluster_split);
         btnSplitLayout.setOnClickListener(new View.OnClickListener() {
@@ -327,9 +351,28 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShowMirrorIntent(intent);
+    }
+
+    private void handleShowMirrorIntent(Intent intent) {
+        if (intent != null
+                && FloatingRemoteButton.ACTION_SHOW_MIRROR.equals(intent.getAction())
+                && mCurrentDashboardApp != null) {
+            showMirrorView();
+            attemptStartMirrorWithCurrentHolder();
+            AppLogger.d(TAG, "handleShowMirrorIntent → showMirrorView for " + mCurrentDashboardApp);
+        }
+    }
+
+    @Override
     protected void onStart() {
         super.onStart();
         AppLogger.lifecycle(getClass().getSimpleName(), "onStart");
+        registerReceiver(mShowMirrorReceiver,
+                new IntentFilter(FloatingRemoteButton.ACTION_SHOW_MIRROR));
         // Retrieve the daemon Binder from ServiceManager if not yet available.
         // ACTION_REQUEST_BINDER no longer works: the daemon no longer has a registerReceiver
         // (forbidden since systemMain() — AMS rejects IApplicationThread).
@@ -365,6 +408,7 @@ public class MainActivity extends AppCompatActivity
     protected void onStop() {
         super.onStop();
         AppLogger.lifecycle(getClass().getSimpleName(), "onStop");
+        try { unregisterReceiver(mShowMirrorReceiver); } catch (IllegalArgumentException ignored) {}
         // Remove the listener but keep the service active: projection continues.
         // Stop the mirror: the HandlerThread must not capture frames in the background.
         // The mirror restarts automatically via the savedItem mechanism in
@@ -380,6 +424,7 @@ public class MainActivity extends AppCompatActivity
         super.onDestroy();
         AppLogger.lifecycle(getClass().getSimpleName(), "onDestroy");
         unregisterReceiver(mDaemonReadyReceiver);
+        try { unregisterReceiver(mShowMirrorReceiver); } catch (IllegalArgumentException ignored) {}
         if (mServiceBound) {
             unbindService(mServiceConn);
             mServiceBound  = false;
@@ -403,6 +448,24 @@ public class MainActivity extends AppCompatActivity
                 updateDashboardStatus(null);
                 btnActivateCluster.setEnabled(true);
 
+                // Restore active cluster app if Activity was recreated (in-memory state lost).
+                // mCurrentDashboardPkg is only null here if the Activity instance was killed
+                // while in background (Home pressed) and a new instance was recreated.
+                if (mCurrentDashboardPkg == null) {
+                    SharedPreferences _p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                    String _pkg  = _p.getString(PREF_CLUSTER_PKG, null);
+                    String _name = _p.getString(PREF_CLUSTER_NAME, null);
+                    if (_pkg != null) {
+                        mCurrentDashboardPkg = _pkg;
+                        mCurrentDashboardApp = _name;
+                        mAdapter.setCurrentPackage(_pkg);
+                        updateDashboardStatus(_name);
+                        updateControlLabel();
+                        showMirrorView(); // makes panelClusterControl visible
+                        AppLogger.i(TAG, "cluster active app restored: " + _pkg);
+                    }
+                }
+
                 // If the panel is visible (app already active), start/reconfigure the mirror
                 if (panelClusterControl.getVisibility() == View.VISIBLE) {
                     attemptStartMirrorWithCurrentHolder();
@@ -419,31 +482,6 @@ public class MainActivity extends AppCompatActivity
                     }
                 }
 
-                // Launch the pending app (tapped during cluster activation)
-                if (mPendingLaunchPackage != null) {
-                    final String pkg = mPendingLaunchPackage;
-                    mPendingLaunchPackage = null;
-                    String resolvedName;
-                    try {
-                        resolvedName = getPackageManager()
-                                .getApplicationLabel(
-                                    getPackageManager().getApplicationInfo(pkg, 0)).toString();
-                    } catch (Exception ignored) {
-                        resolvedName = pkg;
-                    }
-                    final String appDisplayName = resolvedName;
-                    mClusterService.launchOnDashboard(pkg, new ClusterService.LaunchCallback() {
-                        @Override public void onResult(boolean launched) {
-                            if (launched) {
-                                mCurrentDashboardApp = appDisplayName;
-                                mCurrentDashboardPkg = pkg;
-                                mAdapter.setCurrentPackage(pkg);
-                                updateDashboardStatus(appDisplayName);
-                                updateControlLabel();
-                            }
-                        }
-                    });
-                }
             }
         });
     }
@@ -454,11 +492,14 @@ public class MainActivity extends AppCompatActivity
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                stopTrackingApp();
                 mCurrentDashboardApp = null;
                 mCurrentDashboardPkg = null;
                 btnActivateCluster.setEnabled(true);
                 mMainDisplayPkg = null;
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_MAIN_PKG).apply();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .remove(PREF_MAIN_PKG)
+                        .remove(PREF_CLUSTER_PKG).remove(PREF_CLUSTER_NAME).apply();
                 clearSplitState();
                 mAdapter.setCurrentPackage(null);
                 mAdapter.setMainPackage(null);
@@ -467,8 +508,6 @@ public class MainActivity extends AppCompatActivity
             }
         });
     }
-
-    
 
     // ---- AppListAdapter.OnSendToDashboardListener ----
 
@@ -534,14 +573,24 @@ public class MainActivity extends AppCompatActivity
             return;
         }
 
-        // ── Normal behavior — full screen launch ────────────────────────────────
-        mClusterService.launchOnDashboard(pkgName, new ClusterService.LaunchCallback() {
+        // ── Normal behavior — move (or launch if not running) ──────────────────
+        // moveTaskToDisplay() moves the existing task without killing it.
+        // Falls back to launchOnDashboard() if no running task is found.
+        int clusterDisplayId = mClusterService.getDisplayId();
+        if (clusterDisplayId < 0) clusterDisplayId = 1; // Seal EU hardcoded fallback
+        final int targetDisplayId = clusterDisplayId;
+        mClusterService.moveTaskToDisplay(pkgName, targetDisplayId, new ClusterService.LaunchCallback() {
             @Override public void onResult(boolean launched) {
-                AppLogger.log(TAG, "launchOnDashboard " + pkgName + " → " + (launched ? "OK" : "FAILED"));
+                AppLogger.log(TAG, "moveTaskToDisplay " + pkgName + " → display=" + targetDisplayId
+                        + " " + (launched ? "OK" : "FAILED"));
                 if (launched) {
                     mCurrentDashboardApp = appName;
                     mCurrentDashboardPkg = pkgName;
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                            .putString(PREF_CLUSTER_PKG, pkgName)
+                            .putString(PREF_CLUSTER_NAME, appName).apply();
                     mAdapter.setCurrentPackage(pkgName);
+                    startTrackingApp(pkgName); // detect external kill (swipe task switcher)
                     updateDashboardStatus(appName);
                     updateControlLabel();
                     startClusterMirror();
@@ -556,11 +605,11 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onSendToMain(AppInfo app) {
-        // Clean up cluster state before launch: launchOnMainDisplay may return
-        // false even if the app launches correctly (startActivity fallback without reflection).
+        // Clean up cluster state before move
         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+        mCurrentDashboardPkg = null;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .remove(PREF_CLUSTER_PKG).remove(PREF_CLUSTER_NAME).apply();
         // Force-stop the secondary slot in split mode (prevents it from staying on display 1)
         if (mSecondDashboardPkg != null) {
             AdbLocalClient.forceStopApp(this, mSecondDashboardPkg, null);
@@ -573,9 +622,15 @@ public class MainActivity extends AppCompatActivity
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .edit().putString(PREF_MAIN_PKG, app.packageName).apply();
         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+        btnActivateCluster.setEnabled(true);
         showAppList();
-        mDashboardLauncher.launchOnMainDisplay(app.packageName);
+        // Move the running task to display 0 without relaunching.
+        // Falls back to launchOnMainDisplay() if no task is found.
+        if (mServiceBound && mClusterService != null) {
+            mClusterService.moveTaskToDisplay(app.packageName, 0, null);
+        } else {
+            mDashboardLauncher.launchOnMainDisplay(app.packageName);
+        }
         AppLogger.log(TAG, "Send to main display — " + app.packageName);
     }
 
@@ -597,8 +652,7 @@ public class MainActivity extends AppCompatActivity
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
                         // Force-stop le slot secondaire en mode split
                         if (mSecondDashboardPkg != null) {
                             AdbLocalClient.forceStopApp(MainActivity.this, mSecondDashboardPkg, null);
@@ -613,7 +667,7 @@ public class MainActivity extends AppCompatActivity
                         }
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         Toast.makeText(MainActivity.this,
                                 getString(R.string.toast_app_stopped, app.appName),
@@ -645,8 +699,6 @@ public class MainActivity extends AppCompatActivity
         return null;
     }
 
-    /**
-     * Starts the preview VirtualDisplay if the Surface is ready.
     /**
      * Attempts to retrieve the daemon Binder from ServiceManager (via reflection).
      * Called in onStart() if mDaemonBinder == null (daemon already running, app returned to foreground).
@@ -754,6 +806,316 @@ public class MainActivity extends AppCompatActivity
             startScreenshotLoop(displayId);
         }
     }
+
+    // ---- External process-death detection -----------------------------------
+
+    /**
+     * Registers an OnUidImportanceListener for the given package.
+     * Fires (on a binder thread → dispatched to main) when the process importance
+     * rises above IMPORTANCE_CACHED, meaning the app has no active components left
+     * (task removed from display 1 and/or process killed).
+     * Cost: zero — purely event-driven, no polling, no background thread.
+     */
+    /**
+     * Registers an OnUidImportanceListener for the given package via reflection.
+     * ActivityManager.OnUidImportanceListener is absent from the BYD custom SDK android.jar,
+     * so we create a java.lang.reflect.Proxy that implements the real runtime interface.
+     * Fires when process importance rises above IMPORTANCE_CACHED (400), i.e. the app has
+     * no active components — task on display 1 is gone (swipe task-switcher or low-memory kill).
+     * Cost: zero — purely event-driven, no polling, no background thread.
+     */
+    private void startTrackingApp(String packageName) {
+        stopTrackingApp();
+        try {
+            final int uid = getPackageManager().getApplicationInfo(packageName, 0).uid;
+            android.app.ActivityManager am =
+                    (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+
+            // Resolve the hidden interface at runtime
+            Class<?> listenerIface = Class.forName(
+                    "android.app.ActivityManager$OnUidImportanceListener");
+            // IMPORTANCE_CACHED = 400; use literal to avoid SDK resolution issue
+            final int IMPORTANCE_CACHED = 400;
+
+            Object proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    getClassLoader(),
+                    new Class[]{listenerIface},
+                    new java.lang.reflect.InvocationHandler() {
+                        @Override
+                        public Object invoke(Object p, java.lang.reflect.Method method,
+                                Object[] args) {
+                            if ("onUidImportance".equals(method.getName())
+                                    && args != null && args.length == 2) {
+                                int checkedUid  = (Integer) args[0];
+                                int importance  = (Integer) args[1];
+                                if (checkedUid == uid && importance > IMPORTANCE_CACHED) {
+                                    runOnUiThread(new Runnable() {
+                                        @Override public void run() { onExternalAppKill(); }
+                                    });
+                                }
+                            }
+                            return null;
+                        }
+                    });
+
+            java.lang.reflect.Method addMethod =
+                    android.app.ActivityManager.class.getMethod(
+                            "addOnUidImportanceListener", listenerIface, int.class);
+            addMethod.invoke(am, proxy, IMPORTANCE_CACHED);
+            mUidImportanceListener = proxy;
+            AppLogger.d(TAG, "trackApp uid=" + uid + " pkg=" + packageName);
+        } catch (PackageManager.NameNotFoundException e) {
+            AppLogger.w(TAG, "startTrackingApp: " + packageName + " not found");
+        } catch (Exception e) {
+            AppLogger.w(TAG, "startTrackingApp reflection failed: " + e.getMessage());
+        }
+        // Always start the /proc watchdog as a reliable fallback regardless of
+        // whether the OnUidImportanceListener registration succeeded.
+        startWatchdog(packageName);
+    }
+
+    /** Removes the importance listener and stops the /proc watchdog. */
+    private void stopTrackingApp() {
+        stopWatchdog();
+        if (mUidImportanceListener == null) return;
+        try {
+            android.app.ActivityManager am =
+                    (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            Class<?> listenerIface = Class.forName(
+                    "android.app.ActivityManager$OnUidImportanceListener");
+            java.lang.reflect.Method removeMethod =
+                    android.app.ActivityManager.class.getMethod(
+                            "removeOnUidImportanceListener", listenerIface);
+            removeMethod.invoke(am, mUidImportanceListener);
+        } catch (Exception e) {
+            AppLogger.w(TAG, "stopTrackingApp: " + e.getMessage());
+        } finally {
+            mUidImportanceListener = null;
+        }
+    }
+
+    /**
+     * Starts a 2-second periodic check that reads /proc/[pid]/cmdline to detect
+     * when the tracked package's process has disappeared.
+     * No Android permissions required — /proc is readable by any app process.
+     * The check runs on a short-lived background thread to avoid blocking the UI.
+     */
+    private void startWatchdog(final String packageName) {
+        stopWatchdog();
+        mWatchdogPkg = packageName;
+        // Resolve the PID once so each tick only needs to check /proc/[pid] existence
+        // instead of scanning the full /proc directory (~100-300 entries).
+        mWatchdogPid = findPid(packageName);
+        mWatchdogRunnable = new Runnable() {
+            @Override public void run() {
+                if (mCurrentDashboardPkg == null || !packageName.equals(mWatchdogPkg)) return;
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        final boolean alive = isPidAlive(packageName, mWatchdogPid);
+                        runOnUiThread(new Runnable() {
+                            @Override public void run() {
+                                if (mCurrentDashboardPkg == null
+                                        || !packageName.equals(mWatchdogPkg)) return;
+                                if (!alive) {
+                                    AppLogger.d(TAG, "watchdog: " + packageName
+                                            + " absent de /proc → cleanup");
+                                    onExternalAppKill();
+                                } else {
+                                    mScreenshotHandler.postDelayed(
+                                            mWatchdogRunnable, WATCHDOG_INTERVAL_MS);
+                                }
+                            }
+                        });
+                    }
+                }, "watchdog-thread").start();
+            }
+        };
+        mScreenshotHandler.postDelayed(mWatchdogRunnable, WATCHDOG_INTERVAL_MS);
+        AppLogger.d(TAG, "watchdog started for " + packageName + " pid=" + mWatchdogPid);
+    }
+
+    /** Cancels the /proc watchdog. Safe to call multiple times. */
+    private void stopWatchdog() {
+        if (mWatchdogRunnable != null) {
+            mScreenshotHandler.removeCallbacks(mWatchdogRunnable);
+            mWatchdogRunnable = null;
+        }
+        mWatchdogPkg = null;
+        mWatchdogPid = -1;
+    }
+
+    /**
+     * Finds the main PID of packageName by scanning /proc/[pid]/cmdline.
+     * Uses the same /proc filesystem as the watchdog tick — no Android API, no permissions.
+     * On Android 10+ (targetSdk=29), getRunningAppProcesses() only returns our own process
+     * for third-party apps (privacy restriction since API 26), so /proc is the only reliable way.
+     * Returns -1 only if /proc is unreadable (should never happen on Android).
+     */
+    private int findPid(String packageName) {
+        java.io.File procDir = new java.io.File("/proc");
+        String[] entries = procDir.list();
+        if (entries == null) return -1;
+        for (String entry : entries) {
+            boolean isNumeric = true;
+            for (int i = 0; i < entry.length(); i++) {
+                if (entry.charAt(i) < '0' || entry.charAt(i) > '9') { isNumeric = false; break; }
+            }
+            if (!isNumeric) continue;
+            java.io.File cmdlineFile = new java.io.File("/proc/" + entry + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    // Exact match on main process (packageName == processName)
+                    // or sub-process (e.g. "com.pkg:service") — both start with packageName
+                    if (cmdline.equals(packageName)) {
+                        return Integer.parseInt(entry); // exact main process — prefer this
+                    }
+                }
+            } catch (Exception ignore) {
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+        }
+        // Second pass: accept sub-processes (e.g. :remote, :ui) if main not found
+        for (String entry : entries) {
+            boolean isNumeric = true;
+            for (int i = 0; i < entry.length(); i++) {
+                if (entry.charAt(i) < '0' || entry.charAt(i) > '9') { isNumeric = false; break; }
+            }
+            if (!isNumeric) continue;
+            java.io.File cmdlineFile = new java.io.File("/proc/" + entry + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    if (cmdline.startsWith(packageName)) {
+                        return Integer.parseInt(entry);
+                    }
+                }
+            } catch (Exception ignore) {
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Fast liveness check: tests /proc/[pid] directory existence (1 stat syscall).
+     * Also verifies the cmdline still starts with packageName to guard against PID reuse
+     * (a new process getting the same PID after the tracked app was killed).
+     * If the PID is unknown (-1), falls back to the full /proc scan.
+     */
+    private boolean isPidAlive(String packageName, int pid) {
+        if (pid > 0) {
+            java.io.File pidDir = new java.io.File("/proc/" + pid);
+            if (!pidDir.exists()) return false;
+            // Verify the PID still belongs to the expected package (PID reuse guard)
+            java.io.File cmdlineFile = new java.io.File("/proc/" + pid + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    return cmdline.startsWith(packageName);
+                }
+            } catch (Exception ignore) {
+                // Process may have just exited — treat as dead
+                return false;
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+            return false;
+        }
+        // PID unknown — fall back to full scan (should not happen after findPid() fix)
+        return isProcessRunning(packageName);
+    }
+
+    /**
+     * Full /proc scan fallback: returns true if any process whose cmdline starts with packageName
+     * is found. Used only when the PID could not be resolved at watchdog start.
+     * Reads the first bytes of /proc/[pid]/cmdline for each numeric /proc entry.
+     */
+    private boolean isProcessRunning(String packageName) {
+        java.io.File procDir = new java.io.File("/proc");
+        String[] entries = procDir.list();
+        if (entries == null) return true; // /proc unreadable — assume alive to avoid false kill
+        for (String entry : entries) {
+            // Only numeric entries are PIDs
+            boolean isNumeric = true;
+            for (int i = 0; i < entry.length(); i++) {
+                if (entry.charAt(i) < '0' || entry.charAt(i) > '9') { isNumeric = false; break; }
+            }
+            if (!isNumeric) continue;
+            java.io.File cmdlineFile = new java.io.File("/proc/" + entry + "/cmdline");
+            java.io.FileInputStream fis = null;
+            try {
+                fis = new java.io.FileInputStream(cmdlineFile);
+                // Read just enough bytes to check the package name prefix
+                byte[] buf = new byte[packageName.length() + 2];
+                int read = fis.read(buf);
+                if (read > 0) {
+                    // cmdline entries are NUL-separated; take the first segment
+                    int end = read;
+                    for (int i = 0; i < read; i++) {
+                        if (buf[i] == 0) { end = i; break; }
+                    }
+                    String cmdline = new String(buf, 0, end);
+                    if (cmdline.startsWith(packageName)) return true;
+                }
+            } catch (Exception ignore) {
+                // Process may have exited between listing and reading — normal
+            } finally {
+                if (fis != null) try { fis.close(); } catch (Exception ignore) {}
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Called when the tracked app was killed externally (task-switcher swipe, low memory, etc.).
+     * Clears the stale cluster state and restores the app list so the buttons do not remain visible.
+     */
+    private void onExternalAppKill() {
+        if (mCurrentDashboardPkg == null) return; // already cleared by another path
+        AppLogger.i(TAG, "App tué externalement: " + mCurrentDashboardPkg);
+        stopWatchdog();
+        stopTrackingApp();
+        mCurrentDashboardApp = null;
+        mCurrentDashboardPkg = null;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .remove(PREF_CLUSTER_PKG).remove(PREF_CLUSTER_NAME).apply();
+        clearSplitState();
+        mAdapter.setCurrentPackage(null);
+        updateDashboardStatus(null);
+        if (panelClusterControl != null
+                && panelClusterControl.getVisibility() == View.VISIBLE) {
+            showAppList();
+        }
+    }
+
+    // -------------------------------------------------------------------------
 
     /**
      * Hides the app list and displays the cluster mirror in full space.
@@ -893,7 +1255,7 @@ public class MainActivity extends AppCompatActivity
         if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
             AppLogger.d(TAG, "touch → view(" + (int)event.getX() + "," + (int)event.getY()
                     + ") off=(" + (int)offsetX + "," + (int)offsetY + ")"
-                    + " scale=" + String.format("%.3f", scale)
+                    + " scale=" + String.format(java.util.Locale.US, "%.3f", scale)
                     + " cluster=(" + (int)clusterX + "," + (int)clusterY
                     + ")/" + clusterW + "×" + clusterH);
         }
@@ -942,14 +1304,16 @@ public class MainActivity extends AppCompatActivity
         popup.getMenu().add(0, 1, 0, getString(R.string.menu_settings));
         popup.getMenu().add(0, 2, 0, getString(R.string.menu_diagnostic));
         popup.getMenu().add(0, 3, 0, getString(R.string.menu_system_report));
+        popup.getMenu().add(0, 4, 0, getString(R.string.menu_log));
         popup.getMenu().add(0, 5, 0, getString(R.string.menu_language));
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem item) {
                 switch (item.getItemId()) {
-                    case 1: showClusterTypeSettings(); return true;
+                    case 1: startActivity(new Intent(MainActivity.this, SettingsActivity.class)); return true;
                     case 2: startActivity(new Intent(MainActivity.this, DiagActivity.class)); return true;
                     case 3: startActivity(new Intent(MainActivity.this, SysInfoActivity.class)); return true;
+                    case 4: startActivity(new Intent(MainActivity.this, LogActivity.class)); return true;
                     case 5:
                         SharedPreferences p = getSharedPreferences(
                                 LocaleHelper.PREF_FILE, MODE_PRIVATE);
@@ -1027,12 +1391,13 @@ public class MainActivity extends AppCompatActivity
                             mClusterService.stopProjectionNoAdb();
                         }
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                                .remove(PREF_CLUSTER_PKG).remove(PREF_CLUSTER_NAME).apply();
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnRestoreCluster.setEnabled(true);
                         AppLogger.log(TAG, "BYD restored via ADB ✓");
@@ -1057,8 +1422,15 @@ public class MainActivity extends AppCompatActivity
         tvDashboardStatus.setTextColor(Color.WHITE);
         if (appName == null) {
             tvDashboardStatus.setText(getString(R.string.status_dashboard_byd));
+            // No app on cluster — hide the mirror shortcut and the floating button
+            btnShowMirror.setVisibility(View.GONE);
+            FloatingRemoteButton.hide();
+            stopTrackingApp(); // cancel any pending process-death watch
         } else {
             tvDashboardStatus.setText(getString(R.string.status_dashboard_app, appName));
+            // App active on cluster — show the mirror shortcut and the floating button
+            btnShowMirror.setVisibility(View.VISIBLE);
+            FloatingRemoteButton.show();
         }
         btnRestoreCluster.setEnabled(true);
     }
@@ -1082,12 +1454,13 @@ public class MainActivity extends AppCompatActivity
                             mClusterService.stopProjectionNoAdb();
                         }
                         mCurrentDashboardApp = null;
-                mCurrentDashboardPkg = null;
-                btnActivateCluster.setEnabled(true);
+                        mCurrentDashboardPkg = null;
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                                .remove(PREF_CLUSTER_PKG).remove(PREF_CLUSTER_NAME).apply();
                         clearSplitState();
                         mAdapter.setCurrentPackage(null);
                         updateDashboardStatus(null);
-                btnActivateCluster.setEnabled(true);
+                        btnActivateCluster.setEnabled(true);
                         showAppList();
                         btnOriginCluster.setEnabled(true);
                         AppLogger.log(TAG, "Original cluster restored ✓");
@@ -1326,36 +1699,12 @@ public class MainActivity extends AppCompatActivity
                 });
 
                 final List<AppInfo> result = apps;
-                new Handler(Looper.getMainLooper()).post(new Runnable() {
-                    @Override public void run() { mAdapter.setApps(result); }
-                });
+                runOnUiThread(() -> mAdapter.setApps(result));
             }
         });
         loader.shutdown(); // thread ends as soon as the above task finishes
     }
 
-    private void showKeyboardDialog() {
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setHint(getString(R.string.dialog_keyboard_hint));
-        input.setSingleLine(true);
-
-        new android.app.AlertDialog.Builder(this)
-            .setTitle(getString(R.string.dialog_keyboard_title))
-            .setMessage(getString(R.string.dialog_keyboard_message))
-            .setView(input)
-            .setPositiveButton(getString(R.string.btn_send), new android.content.DialogInterface.OnClickListener() {
-                public void onClick(android.content.DialogInterface dialog, int whichButton) {
-                    final String text = input.getText().toString();
-                    if (!text.isEmpty()) {
-                        // On Android, "input text" takes space as %s
-                        String escapedText = text.replace(" ", "%s").replace("\"", "\\\"");
-                        AdbLocalClient.executeShell(MainActivity.this, "input text \"" + escapedText + "\"");
-                    }
-                }
-            })
-            .setNegativeButton(getString(R.string.btn_cancel), null)
-            .show();
-    }
-
 }
+
 

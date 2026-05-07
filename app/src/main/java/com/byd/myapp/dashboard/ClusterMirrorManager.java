@@ -3,8 +3,6 @@ package com.byd.myapp.dashboard;
 import android.content.Context;
 import android.graphics.Point;
 import android.graphics.Rect;
-import android.hardware.display.DisplayManager;
-import android.hardware.display.VirtualDisplay;
 import android.os.IBinder;
 import android.os.Parcel;
 import android.view.Display;
@@ -30,19 +28,13 @@ public class ClusterMirrorManager {
 
     private static final String TAG = "ClusterMirrorManager";
 
-    private static final int VDISPLAY_FLAGS = 320;
-
-    // ── SurfaceControl mirror token ──────────────────────────────────────────
+    // ── SurfaceControl mirror token ───────────────────────────────────────────────
     private IBinder mMirrorDisplayToken = null;
     private Surface mMirrorSurface      = null;
 
-    // ── Local preview ────────────────────────────────────────────────────────
-    private VirtualDisplay mPreviewVD    = null;
-    private int            mPreviewDisplayId = -1;
-
     private boolean mMirrorActive = false;
     private int     mClusterW = 1920;
-    private int     mClusterH = 1080;  // Match physical cluster resolution (Seal EU)
+    private int     mClusterH = 720;   // Confirmed: fission_bg_xdjaVirtualSurface 1920×720 (dumpsys window 03/05/2026)
 
     // ── Projection parameters (set when setDisplayProjection is called) ───────
     // Stored with integer arithmetic to match the daemon's computation exactly.
@@ -55,7 +47,6 @@ public class ClusterMirrorManager {
     public int     getClusterWidth()           { return mClusterW; }
     public int     getClusterHeight()          { return mClusterH; }
     public boolean isMirrorActive()            { return mMirrorActive; }
-    public int     getPreviewDisplayId()       { return mPreviewDisplayId; }
 
     /** Returns the horizontal letterbox offset (pixels) used in the last setDisplayProjection call. */
     public int   getProjOffsetX() { return mProjOffsetX; }
@@ -184,7 +175,6 @@ public class ClusterMirrorManager {
 
             mMirrorSurface = targetSurface;
             mMirrorActive  = true;
-            // mPreviewDisplayId reste -1 (pas de VirtualDisplay — le contenu vient du cluster)
             AppLogger.i(TAG, "SurfaceControl mirror ✓ layerStack=" + layerStack
                     + " src=" + mClusterW + "×" + mClusterH
                     + " dest=" + drawW + "×" + drawH + " offset=(" + offsetX + "," + offsetY + ")");
@@ -210,7 +200,7 @@ public class ClusterMirrorManager {
 
         // Cluster dimensions
         if (clusterDisplay != null) {
-            Point sz = new Point(1920, 1080);
+            Point sz = new Point(1920, 720);
             clusterDisplay.getRealSize(sz);
             mClusterW = sz.x;
             mClusterH = sz.y;
@@ -284,7 +274,9 @@ public class ClusterMirrorManager {
             daemonBinder.transact(com.byd.myapp.daemon.MirrorDaemon.TRANSACT_MIRROR_STOP,
                     data, null, android.os.IBinder.FLAG_ONEWAY);
             data.recycle();
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            AppLogger.w(TAG, "stopMirrorViaDaemon transact failed: " + e.getMessage());
+        }
         mMirrorActive  = false;
         mMirrorSurface = null;
         AppLogger.i(TAG, "stopMirrorViaDaemon sent");
@@ -300,7 +292,9 @@ public class ClusterMirrorManager {
                         IBinder.class);
                 destroyDisplay.setAccessible(true);
                 destroyDisplay.invoke(null, mMirrorDisplayToken);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                AppLogger.w(TAG, "destroyDisplay via reflection failed: " + e.getMessage());
+            }
             mMirrorDisplayToken = null;
             mMirrorSurface = null;
         }
@@ -308,12 +302,7 @@ public class ClusterMirrorManager {
 
     private void stopPreview() {
         mMirrorActive = false;
-        mPreviewDisplayId = -1;
         mProjScale = 0f;  // Reset: signals "not yet set" to touch mapping
-        if (mPreviewVD != null) {
-            try { mPreviewVD.release(); } catch (Exception ignored) {}
-            mPreviewVD = null;
-        }
         destroyMirrorToken();
     }
 

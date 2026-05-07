@@ -34,7 +34,7 @@ public class ClusterInputForwarder {
     private static final int INJECT_INPUT_EVENT_MODE_ASYNC = 0;
 
     private int mClusterWidth      = 1920;
-    private int mClusterHeight     = 1080;
+    private int mClusterHeight     = 720;  // Confirmed: cluster VirtualDisplay is 1920×720 (dumpsys window 03/05/2026)
     private int mClusterDisplayId  = 1;   // Cluster display ID (routing for API 29)
 
     /** MirrorDaemon Binder — if non-null, events are routed through uid=2000. */
@@ -99,21 +99,6 @@ public class ClusterInputForwarder {
     public void setDaemonBinder(IBinder binder) {
         mDaemonBinder = binder;
         AppLogger.i(TAG, "Daemon Binder connected — touch/key injection via uid=2000");
-    }
-
-    /**
-     * Forwards a touch event to the cluster via InputManager.injectInputEvent
-     * with setDisplayId — identical to what WindowManagement v1.2 does.
-     *
-     * @param padX / padY  Coordinates already mapped to cluster space (not view space)
-     * @param padW / padH  Reference dimensions (= mClusterWidth/Height if already mapped)
-     * @param action       MotionEvent.ACTION_DOWN / ACTION_MOVE / ACTION_UP
-     */
-    public void forwardTouch(float padX, float padY, float padW, float padH, final int action) {
-        // Proportional mapping to cluster space
-        final float clusterX = (padX / padW) * mClusterWidth;
-        final float clusterY = (padY / padH) * mClusterHeight;
-        injectTouchAt(clusterX, clusterY, action);
     }
 
     /**
@@ -186,7 +171,9 @@ public class ClusterInputForwarder {
             if (mSetDisplayIdMethod != null) {
                 try {
                     mSetDisplayIdMethod.invoke(ev, mClusterDisplayId);
-                } catch (Exception ignored) {}
+                } catch (Exception e) {
+                    AppLogger.d(TAG, "setDisplayId via reflection failed: " + e.getMessage());
+                }
             }
             mInjectMethod.invoke(mInputManager, ev, INJECT_INPUT_EVENT_MODE_ASYNC);
             ev.recycle();

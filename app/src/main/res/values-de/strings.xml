@@ -14,13 +14,13 @@
 
     <!-- MainActivity — status bar -->
     <string name="status_disconnected">Dashboard: nicht verbunden</string>
-    <string name="btn_activate_cluster">Cluster aktivieren</string>
-    <string name="btn_restore_cluster">Cluster wiederherstellen</string>
-    <string name="btn_origin_cluster">Original-Cluster</string>
+    <string name="btn_activate_cluster">Projektion aktivieren</string>
+    <string name="btn_show_mirror">📺 Spiegeln</string>
+    <string name="btn_restore_cluster">Projektion stoppen</string>
+    <string name="btn_origin_cluster">Original-Dashboard wiederherstellen</string>
     <string name="title_app_list">Installierte Apps</string>
     <string name="mirror_placeholder">Aktive Anzeige auf Cluster ✓</string>
     <string name="btn_cluster_split">⬛⬛ Split</string>
-    <string name="btn_cluster_keyboard">⌨️ Tastatur</string>
 
     <!-- Cluster control panel -->
     <string name="cluster_control_title">Cluster-Steuerung</string>
@@ -33,24 +33,15 @@
     <!-- MainActivity — status texts -->
     <string name="status_starting_cluster">Cluster wird gestartet…</string>
     <string name="status_activating_cluster">Cluster wird aktiviert…</string>
-    <string name="status_cluster_activated">Cluster aktiviert ✓</string>
     <string name="status_restoring_cluster">Cluster wird wiederhergestellt…</string>
     <string name="status_restoring_origin">Original-Cluster wird wiederhergestellt…</string>
     <string name="status_dashboard_byd">Dashboard: BYD-Anzeige</string>
     <string name="status_dashboard_app">Dashboard: %1$s</string>
-    <string name="status_vd_detected">Cluster-VirtualDisplay erkannt ✓ — bereit zur Aktivierung</string>
-    <string name="status_vd_not_found">⚠ VirtualDisplay nicht gefunden — vollständige Sequenz erforderlich (30→16→35)</string>
-    <string name="status_activation_timeout">⚠ Timeout: VirtualDisplay nicht erstellt. Bitte erneut versuchen.</string>
-    <string name="status_freedom_active">Freedom aktiv ✓ — Cluster bereit</string>
-    <string name="status_freedom_starting">Freedom wird gestartet…</string>
-    <string name="status_freedom_not_installed">⚠ Freedom nicht installiert — Streaming nicht möglich</string>
-    <string name="status_freedom_unknown">Freedom: unbekannter Zustand</string>
 
     <!-- MainActivity — Toasts -->
     <string name="toast_app_incompatible">%1$s: nicht installiert oder inkompatibel mit Multi-Display</string>
     <string name="toast_cluster_unavailable">Cluster-Dienst nicht verfügbar</string>
     <string name="toast_app_already_cluster">App bereits auf dem Cluster</string>
-    <string name="toast_activation_failed">Aktivierung fehlgeschlagen: %1$s</string>
     <string name="toast_restore_failed">Wiederherstellung fehlgeschlagen: %1$s</string>
     <string name="toast_origin_failed">Original-Cluster-Wiederherstellung fehlgeschlagen: %1$s</string>
     <string name="toast_app_stopped">%1$s gestoppt</string>
@@ -62,6 +53,7 @@
     <string name="menu_settings">⚙️ Einstellungen</string>
     <string name="menu_diagnostic">🔧 Diagnose</string>
     <string name="menu_system_report">📋 Systembericht</string>
+    <string name="menu_log">📜 Protokolle</string>
     <string name="menu_language">🌐 Sprache</string>
 
     <!-- MainActivity — cluster type dialog -->
@@ -77,10 +69,6 @@
     <string name="split_left">⬜⬛ Links (50 %)</string>
     <string name="split_right">⬛⬜ Rechts (50 %)</string>
 
-    <!-- MainActivity — keyboard dialog -->
-    <string name="dialog_keyboard_title">Tastatureingabe (Cluster)</string>
-    <string name="dialog_keyboard_message">Nach der Bestätigung wird der Text automatisch in der Anwendung eingegeben.</string>
-    <string name="dialog_keyboard_hint">Text an Cluster senden</string>
     <string name="btn_send">Senden</string>
 
     <!-- LogActivity -->
@@ -107,98 +95,120 @@
     <string name="toast_report_saved">Bericht gespeichert:\n%1$s</string>
 
     <!-- DiagActivity — layout labels -->
-    <string name="diag_title">Kompatibilitätsdiagnose</string>
-    <string name="diag_subtitle">Prüft, welcher Mechanismus verfügbar ist, um Apps auf den Dashboard-Bildschirm (Instrument Cluster) zu senden.</string>
-    <string name="diag_test1_title">TEST 1 — Lokale ADB-Verbindung (dadb)</string>
-    <string name="diag_test1_desc">Verbindet sich mit dem ADB-Daemon der Tablette auf localhost:5555 (gleicher Mechanismus wie Overdrive). Beim ersten Start erscheint ein Popup «USB-Debugging erlauben?» — ERLAUBEN drücken. Danach werden alle verweigerten BYDAUTO_*_GET-Berechtigungen via pm grant entsperrt.</string>
-    <string name="btn_adb_local_label">Lokale ADB-Verbindung + Berechtigungen erteilen</string>
-    <string name="diag_press_hint">Schaltfläche drücken, um zu starten.</string>
     <string name="diag_share_result1_btn">TEST 1-Ergebnis teilen</string>
-    <string name="diag_test2_title">TEST 2 — Cluster-Wiederherstellung</string>
-    <string name="diag_test2_desc">Bei BYD DiLink 3.0 ist der Cluster = Display-ID 1 in IActivityManager (nicht in DisplayManager). sendInfo(1000,16) + am start --display 1.</string>
-    <string name="diag_launch_test2_btn">▶ TEST 2 starten</string>
-    <string name="diag_result_test2_hint">(TEST 2-Ergebnis)</string>
     <string name="diag_share_result2_btn">TEST 2-Ergebnis teilen</string>
-    <string name="diag_test3_title">TEST 3 — Cluster-Display-Größe (Qt-Auflösung)</string>
-    <string name="diag_test3_desc">Cluster-Bildschirmgröße: cmd 29=8,8\" (Atto3/Dolphin) / cmd 30=12,3\" (Seal EU ✅) / cmd 31=10,25\". Bestätigt 16/04/2026: cmd 30 = korrekte Seal EU-Auflösung. Zurücksetzen: cmd30 + wm reset.</string>
-    <string name="diag_size_88_btn">▶ 8,8\"\n(cmd 29)\nAtto3/Dolphin</string>
-    <string name="diag_size_123_btn">▶ 12,3\"\n(cmd 30)\nSeal EU ✅</string>
-    <string name="diag_size_1025_btn">▶ 10,25\"\n(cmd 31)\nandere Modelle</string>
-    <string name="diag_size_restore_btn">🔄 Standard wiederherstellen (cmd 30 + wm reset)</string>
-    <string name="diag_size_full_btn">📊 Volldiagnose (~8 s)</string>
-    <string name="diag_test3_hint_text">Schaltfläche drücken (ADB muss autorisiert sein — zuerst TEST 1 ausführen).</string>
     <string name="diag_share_result3_btn">TEST 3-Ergebnis teilen</string>
-    <string name="diag_test4_title">TEST 4 — BootReceiver Freedom (headless)</string>
-    <string name="diag_test4_desc">Sendet BOOT_COMPLETED direkt an Freedoms BootReceiver (com.xdja.clusterdemo) via ADB, ohne dessen UI zu öffnen. Wenn dadurch ein Cluster-VirtualDisplay erstellt wird → Freedom kann headless gestartet werden.</string>
-    <string name="diag_launch_test4_btn">▶ TEST 4 starten — Broadcast BootReceiver</string>
-    <string name="diag_result_test4_hint">(TEST 4-Ergebnis)</string>
-    <string name="diag_share_result4_btn">TEST 4-Ergebnis teilen</string>
-    <string name="diag_test5_title">TEST 5 — MirrorDaemon-Verwaltung (uid=2000)</string>
-    <string name="diag_test5_desc">Prüft und steuert den MirrorDaemon-Prozess (com.byd.myapp.mirrordaemon). Mehrere gleichzeitige Instanzen verursachen einen schwarzen Bildschirm.</string>
-    <string name="diag_scan_daemon_btn">🔍 Aktive MirrorDaemon scannen</string>
-    <string name="diag_scan_result_hint">(Scan-Ergebnis)</string>
-    <string name="diag_kill_daemon_btn">☠ Alle MirrorDaemon beenden</string>
-    <string name="diag_kill_restart_daemon_btn">🔄 MirrorDaemon beenden + neu starten</string>
-    <string name="diag_export_daemon_log_btn">📋 mirrordaemon.log exportieren</string>
-    <string name="diag_dump_sf_btn">🔬 SurfaceFlinger-Dump (byd_myapp_mirror)</string>
-    <string name="diag_dump_sf_result_hint">(SF-Dump-Ergebnis)</string>
-    <string name="diag_clean_daemon_btn">🗑 Alle mirrordaemon*.log löschen</string>
-    <string name="diag_test6_title">TEST 6 — System-Sniffer</string>
-    <string name="diag_test6_desc">Erfasst gefilterte Logcat- und dumpsys-Snapshots alle 30 s im Hintergrund.</string>
-    <string name="diag_scan_sniffer_btn">🔍 Aktive Sniffer-Prozesse scannen</string>
-    <string name="diag_sniffer_result_hint">(Scan-Ergebnis)</string>
-    <string name="diag_start_sniffer_btn">▶ Sniffer starten</string>
-    <string name="diag_stop_sniffer_btn">☠ Alle Sniffer-Prozesse beenden</string>
-    <string name="diag_export_sniffer_btn">📤 Sniffer-Bericht exportieren (Telegram…)</string>
-    <string name="diag_clean_sniffer_btn">🗑 Alle BYD_Sniffer_Dump*.txt löschen</string>
-    <string name="diag_test_daemon_btn">🧪 Freedom IPC testen (experimentell)</string>
 
     <!-- DiagActivity — Java status / feedback -->
     <string name="diag_adb_connecting">Verbindung zu localhost:5555…\n⏳ Das Popup erscheint auf diesem Bildschirm — ERLAUBEN drücken.</string>
     <string name="diag_adb_connected">✅ Verbindung hergestellt\n\n</string>
     <string name="diag_adb_failed">❌ Fehlgeschlagen: %1$s\n\n→ Prüfen, ob ADB-TCP-Debugging aktiviert ist\n  in Einstellungen → Entwickler → USB-Debugging\n  (oder Wireless-Debugging auf diesem ROM)</string>
     <string name="diag_adb_test1_hint">→ Zuerst TEST 1 ausführen, um die ADB-Verbindung zu autorisieren.</string>
-    <string name="diag_adb_error_with_hint">❌ %1$s\n\n→ Zuerst TEST 1 ausführen, um die ADB-Verbindung zu autorisieren.</string>
     <string name="diag_launching_display1">⏳ Display 1 wird gestartet…</string>
     <string name="diag_size_sending">⏳ sendInfo(1000, %1$d) → %2$s…</string>
     <string name="diag_size_restoring">⏳ Standardgröße wird wiederhergestellt (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Cluster-Dimensionsdiagnose…\nVersuch cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 Sekunden)</string>
-    <string name="diag_boot_receiver_running">⏳ Freedom beenden, dann BOOT_COMPLETED → BootReceiver senden…\n5 s auf VirtualDisplay-Erstellung warten…</string>
-    <string name="diag_sniffer_killing">Sniffer wird beendet…</string>
-    <string name="diag_scanning">Wird gescannt…</string>
-    <string name="diag_daemon_killing">kill -9 wird gesendet…</string>
-    <string name="diag_daemon_log_reading">mirrordaemon_latest.log wird via ADB gelesen…</string>
     <string name="diag_sf_dumping">dumpsys SurfaceFlinger wird ausgeführt…</string>
     <string name="diag_sf_no_result">(kein Ergebnis — Mirror nicht in SF registriert)</string>
     <string name="diag_sf_error">Fehler: %1$s</string>
     <string name="toast_sniffer_started">Sniffer gestartet → %1$s</string>
-    <string name="toast_daemon_logs_deleted">Daemon-Protokolle gelöscht</string>
-    <string name="toast_folder_not_found">Ordner nicht gefunden</string>
-    <string name="diag_daemon_logs_deleted_text">mirrordaemon_*.log gelöscht ✓</string>
-    <string name="diag_no_sniffer_report">Kein Bericht gefunden (zuerst Sniffer starten).</string>
-    <string name="diag_share_sniffer_title">Sniffer teilen</string>
-    <string name="diag_share_daemon_log_title">mirrordaemon_latest.log teilen</string>
-    <string name="toast_share_error">Freigabefehler: %1$s</string>
-    <string name="diag_sniffer_files_deleted">%1$d Sniffer-Datei(en) gelöscht ✓</string>
-    <string name="toast_files_deleted">%1$d Datei(en) gelöscht</string>
-    <string name="toast_experimental">Experimentell — nicht funktionsfähig\n(app_process von uid=10100 nicht zugänglich)</string>
 
     <!-- DiagActivity — killAndRestartDaemon -->
-    <string name="diag_kill_restart_in_progress">Beenden + Neustart läuft…</string>
-    <string name="diag_kill_ok_restarting">Kill OK — Neustart…</string>
-    <string name="diag_daemon_restarted">MirrorDaemon neu gestartet — Protokoll in 5 s prüfen</string>
-    <string name="toast_daemon_restarted">MirrorDaemon neu gestartet (sauber)</string>
-    <string name="diag_kill_failed">Beenden fehlgeschlagen: %1$s</string>
-
-    <string name="diag_test7_title">TEST 7 — Cluster-Orientierung (freezeDisplayRotation)</string>
-    <string name="diag_test7_desc">Freeze/Unfreeze der Cluster-Display-Rotation via IWindowManager. Freeze LANDSCAPE verhindert, dass Apps in den Hochformat-Modus wechseln. Kein wm size — Hauptbildschirmauflösung bleibt unberührt.</string>
-    <string name="diag_orientation_hint">(TEST 7-Ergebnis — Cluster-Orientierung)</string>
-    <string name="diag_orient_freeze_landscape">🔒 Freeze LANDSCAPE</string>
-    <string name="diag_orient_freeze_portrait">🔒 Freeze PORTRAIT (Test)</string>
-    <string name="diag_orient_unfreeze">🔓 Unfreeze</string>
-    <string name="diag_orient_read">📐 Rotation lesen</string>
 
     <!-- AppLogger -->
     <string name="share_log_title">Protokoll teilen…</string>
     <string name="share_report_title">Bericht teilen…</string>
+
+        <!-- DiagActivity: layout labels -->
+    <string name="diag_header">Diagnose-Dashboard</string>
+    <string name="diag_s1_title">1. Lokales ADB (Voraussetzung)</string>
+    <string name="diag_s1_desc">Erforderlich zum Injizieren von Daemons und Erstellen des System-VirtualDisplays wie Dilink5.</string>
+    <string name="diag_s1_initial">Nicht verbunden</string>
+    <string name="diag_btn_adb_connect">ADB verbinden</string>
+    <string name="diag_btn_share_result">Teilen</string>
+    <string name="diag_s2_title">2. Daemon-Injektion &amp; Rendering</string>
+    <string name="diag_s2_desc">Startet DashCastDaemon.java in app_process via ADB-Shell: erbt CAPTURE_VIDEO_OUTPUT.</string>
+    <string name="diag_btn_create_vd">VirtualDisplay erstellen (Daemon injizieren)</string>
+    <string name="diag_s3_title">3. Cluster-Eigenschaften</string>
+    <string name="diag_s3_initial">Display-Größe</string>
+    <string name="diag_s3_display1_initial">Cluster-Anzeige wiederherstellen</string>
+    <string name="diag_btn_restore_display">Anzeige wiederherstellen</string>
+    <string name="diag_s4_title">4. Systemanalyse (SurfaceFlinger)</string>
+    <string name="diag_dumpsys_initial">Dumpsys window displays: --</string>
+    <string name="diag_btn_run_dumpsys">dumpsys window displays ausführen</string>
+    <string name="diag_jni_initial">JNI-Probe-Ergebnis: --</string>
+    <string name="diag_btn_jni_probe">JNI-Probe</string>
+    <string name="diag_btn_jni_start_probe">Start + JNI-Probe</string>
+    <string name="diag_sf_initial">SF-Dump: --</string>
+    <string name="diag_btn_dump_mirror">Mirror-Service dumpen</string>
+    <string name="diag_auto_display_title">AutoDisplayService (com.xdja.containerservice)</string>
+    <string name="diag_auto_display_desc">Startet den Qt→VirtualDisplay-Dienst direkt. Dies ist Dilink5\'s interner Mechanismus: Qt-Surface wird abgerufen und an createVirtualDisplay übergeben.</string>
+    <string name="diag_btn_start_auto_display">AutoDisplayService STARTEN</string>
+    <string name="diag_btn_stop">STOP</string>
+    <string name="diag_fission_title">Fission-Pipeline (Cluster-VirtualDisplay-Erstellung)</string>
+    <string name="diag_fission_desc">Vollständige Sequenz: sendInfo(30)+sendInfo(16) → Qt registriert Surface → am startservice AutoDisplayService → updateDisplay() → createVirtualDisplay(fission_testVirtualSurface). Dann DashBoard auf diesem Display starten.</string>
+    <string name="diag_btn_sendinf_java">☕ sendInfo Java Direct (v0.1.21)</string>
+    <string name="diag_btn_fission_create">🚀 Fission-Display erstellen</string>
+    <string name="diag_btn_fission_launch">▶ Dashboard starten</string>
+    <string name="diag_s5_title">5. System-Sniffer (Reverse Engineering)</string>
+    <string name="diag_s5_desc">Erfasst Logcat (alle relevanten Tags) + periodische Dumpsys-Snapshots in einer exportierbaren Datei. Für Reverse Engineering: erfasst Display, SF, AM, WM, BYD, autoContainer, Qt, Broadcasts.</string>
+    <string name="diag_sniffer_inactive">Inaktiv</string>
+    <string name="diag_btn_start">START</string>
+    <string name="diag_btn_snapshot">Snapshot jetzt</string>
+    <string name="diag_btn_export_sniffer">Exportieren</string>
+        <!-- DiagActivity: dynamic messages -->
+    <string name="diag_auto_starting">Starten via ADB…</string>
+    <string name="diag_auto_stopping">Stoppen via ADB…</string>
+    <string name="diag_auto_stopped">STOP: %1$s</string>
+    <string name="diag_jni_display_released">Display freigegeben. JNI wird getestet…</string>
+    <string name="diag_jni_fatal">FATAL: %1$s</string>
+    <string name="diag_jni_send16_failed">Senden von 16 fehlgeschlagen: %1$s</string>
+    <string name="diag_running">Diagnose läuft…</string>
+    <string name="diag_dumpsys_running">Ausführung via adb local…</string>
+    <string name="diag_dumpsys_error">FEHLER:\n%1$s</string>
+    <string name="diag_daemon_launching">Daemon wird via adb local gestartet…</string>
+    <string name="diag_daemon_timeout">TIMEOUT: ADB hat nicht innerhalb von %1$ds geantwortet.</string>
+    <string name="diag_daemon_output">DAEMON-AUSGABE: %1$s</string>
+    <string name="diag_daemon_error">FEHLER: %1$s</string>
+    <string name="diag_apk_path_error">APK-Pfadfehler: %1$s</string>
+    <string name="diag_fission_binder_starting">sendInfo Java direct…</string>
+    <string name="diag_fission_running">Sequenz läuft…</string>
+    <string name="diag_fission_no_display">❌ Kein Fission-Display. Zuerst « Fission-Display erstellen » ausführen.</string>
+    <string name="diag_fission_launching">Starten auf Display %1$d…</string>
+    <string name="diag_sniffer_initializing">Initialisierung…</string>
+    <string name="diag_sniffer_active">AKTIV → %1$s</string>
+    <string name="diag_sniffer_init_failed">❌ Init fehlgeschlagen: %1$s</string>
+    <string name="diag_sniffer_stopped">Gestoppt — Datei: %1$s</string>
+    <string name="toast_sniffer_stopped">Sniffer gestoppt.</string>
+    <string name="toast_sniffer_start_first">Zuerst den Sniffer starten.</string>
+    <string name="toast_snapshot_done">Snapshot in Datei injiziert.</string>
+    <string name="toast_sniffer_no_file">Keine Sniffer-Datei zum Exportieren.</string>
+    <string name="toast_no_result_to_share">Kein Ergebnis zum Teilen.</string>
+    <string name="diag_btn_size_restore">RESTORE</string>
+    <string name="diag_btn_size_full">FULL TEST</string>
+    <string name="diag_btn_reset_main_overscan">⚠️ Overscan Hauptbildschirm zurücksetzen (Display 0)</string>
+    <string name="diag_reset_main_overscan_done">Overscan Display 0 zurückgesetzt — wm overscan reset -d 0</string>
+    <!-- Abschnitt 7 — DiLink5 Resize-Test -->
+    <string name="diag_s7_title">7. DiLink5 Resize-Test (IATM)</string>
+    <string name="diag_s7_desc">Testet die DiLink5-Dashboard-Sequenz: setTaskWindowingMode(4) → setTaskWindowingMode(5) → resizeTask(RESIZE_MODE_FORCED=3) über Raw-Binder auf activity_task. Ändert den bestehenden Projektionscode nicht. Starten Sie zuerst eine App auf dem Cluster über das Hauptpanel.</string>
+    <string name="diag_btn_resize_dilink5_seq">▶ DiLink5-Sequenz (WM:4→5 + Resize FORCED=3)</string>
+    <string name="diag_btn_resize_forced_only">▶ resizeTask FORCED=3 allein (ohne WM-Änderung)</string>
+    <string name="diag_btn_resize_inspect_task">🔍 Cluster-Task prüfen (Windowing + Bounds)</string>
+    <!-- Section 6 — Speicher bereinigen -->
+    <string name="diag_s6_title">6. Speicherbereinigung</string>
+    <string name="diag_s6_desc">Löscht von DashCast erzeugte Log- und Berichtsdateien: byd_log_*.log, byd_report_*.txt, BYD_RE_Sniffer_*.txt, cluster_live.png. Löscht auch den In-Memory-Logpuffer. ADB-Schlüssel (adb.key / adb.pub) werden NICHT gelöscht.</string>
+    <string name="diag_btn_cleanup">🗑️ Trace-Dateien löschen</string>
+    <string name="diag_cleanup_running">Bereinigung läuft…</string>
+    <string name="diag_cleanup_done">%1$d Datei(en) gelöscht — verbleibender Speicher: %2$s</string>
+
+    <!-- SettingsActivity -->
+    <string name="settings_header">Einstellungen</string>
+    <string name="settings_cluster_type_title">Cluster-Typ</string>
+    <string name="settings_overscan_section_title">Anzeigeränder (Overscan)</string>
+    <string name="settings_overscan_desc">Randwerte anpassen, um Inhalte auf dem Kombiinstrument zu positionieren. Werte gelten ab dem nächsten Start.</string>
+    <string name="settings_inset_h_label">Links / Rechts:</string>
+    <string name="settings_inset_v_label">Oben / Unten:</string>
+    <string name="settings_btn_apply_overscan">Jetzt anwenden</string>
+    <string name="settings_btn_reset_overscan">Zurücksetzen (80 / 50)</string>
+    <string name="settings_overscan_applied">✓ Angewendet — L/R: %1$d px, O/U: %2$d px</string>
 </resources>

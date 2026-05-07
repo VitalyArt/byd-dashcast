@@ -40,6 +40,9 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     private static final int NOTIF_ID = 1;
     public static boolean sIsRunning = false;
 
+    // Overscan inset values are stored in SharedPreferences and editable via SettingsActivity.
+    // Defaults: H=80 (left/right), V=50 (top/bottom). Read at each use so changes apply live.
+
     // ── Listener for MainActivity ───────────────────────────────────────────
     public interface Listener {
         void onClusterDisplayConnected(Display display, int displayId);
@@ -60,8 +63,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     private ClusterInputForwarder  mInputForwarder;
     private Listener               mListener;
     private boolean                mProjectionActive = false;
-    // Last known Freedom state — cached for replay in setListener()
-        // Reusable handler on the main thread (replaces ephemeral new Handler() calls).
+    // Reusable handler on the main thread (replaces ephemeral new Handler() calls).
     private final android.os.Handler mMainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
     // ────────────────────────────────────────────────────────────────────────
@@ -128,15 +130,21 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
 
     // ── Public API (called from MainActivity via the binder) ─────────────────
 
-    /**
-     * Checks Freedom state via ADB, then:
-     *   ACTIVE      → mDisplayHelper.start() directly
-     *   INACTIVE    → startFreedom() (force-stop + navigationType=1 + am start) → 2s delay → start()
-     *   NOT_INSTALLED → mDisplayHelper.start() anyway (let activateClusterDisplay handle the fallback)
-     */
     private void startNativeProjection() {
         AppLogger.i(TAG, "Starting cluster projection (native)...");
-        mDisplayHelper.start(false);
+        mDisplayHelper.start();
+    }
+
+    /** Returns the current horizontal overscan inset (left + right) from persistent settings. */
+    private int getInsetH() {
+        return getSharedPreferences("byd_app_prefs", MODE_PRIVATE)
+                .getInt(SettingsActivity.PREF_INSET_H, SettingsActivity.DEFAULT_INSET_H);
+    }
+
+    /** Returns the current vertical overscan inset (top + bottom) from persistent settings. */
+    private int getInsetV() {
+        return getSharedPreferences("byd_app_prefs", MODE_PRIVATE)
+                .getInt(SettingsActivity.PREF_INSET_V, SettingsActivity.DEFAULT_INSET_V);
     }
 
     public void setListener(Listener listener) {
@@ -150,7 +158,9 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                     (android.hardware.display.DisplayManager)
                     getSystemService(DISPLAY_SERVICE);
                 if (dm != null) d = dm.getDisplay(knownId);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                AppLogger.w(TAG, "getDisplay(" + knownId + ") failed: " + e.getMessage());
+            }
             mListener.onClusterDisplayConnected(d, knownId);
         }
     }
@@ -170,6 +180,122 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     public interface LaunchCallback {
         void onResult(boolean success);
     }
+
+    // ── Task reparenting ─────────────────────────────────────────────────────
+
+    /**
+     * Finds the taskId of the running task whose top activity belongs to packageName.
+     * Must be called from a background thread.
+     * Returns -1 if no running task is found.
+     */
+    private int findRunningTaskId(String packageName) {
+        try {
+            android.app.ActivityManager am =
+                    (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            java.util.List<android.app.ActivityManager.RunningTaskInfo> tasks =
+                    am.getRunningTasks(50);
+            for (android.app.ActivityManager.RunningTaskInfo t : tasks) {
+                if (t.topActivity != null
+                        && packageName.equals(t.topActivity.getPackageName())) {
+                    AppLogger.d(TAG, "findRunningTaskId " + packageName + " → taskId=" + t.id);
+                    return t.id;
+                }
+            }
+        } catch (Exception e) {
+            AppLogger.w(TAG, "findRunningTaskId: " + e.getMessage());
+        }
+        return -1;
+    }
+
+    /**
+     * Moves the running task for packageName to targetDisplayId using
+     * IActivityTaskManager.moveTaskToDisplay() (hidden API, reflection — no relaunch, no state loss).
+     *
+     * For the cluster (targetDisplayId > 0), also applies FREEFORM + inset bounds after the move.
+     *
+     * Fallback: if the task is not found (app not yet running) or the IATM call fails,
+     *   - targetDisplayId > 0 → launchOnDashboard() (fresh launch with 2s delay)
+     *   - targetDisplayId == 0 → mLauncher.launchOnMainDisplay() (relaunch on main)
+     *
+     * Callback is always called on the main thread.
+     */
+    public void moveTaskToDisplay(final String packageName, final int targetDisplayId,
+                                   final LaunchCallback callback) {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    int taskId = findRunningTaskId(packageName);
+                    if (taskId == -1) {
+                        AppLogger.w(TAG, "moveTaskToDisplay: no running task for "
+                                + packageName + " → fallback launch");
+                        fallbackLaunch(packageName, targetDisplayId, callback);
+                        return;
+                    }
+
+                    // IActivityTaskManager.moveTaskToDisplay(taskId, displayId)
+                    Class<?> atmClass  = Class.forName("android.app.ActivityTaskManager");
+                    Object   iatm      = atmClass.getMethod("getService").invoke(null);
+                    Class<?> iAtmClass = iatm.getClass();
+                    iAtmClass.getMethod("moveTaskToDisplay", int.class, int.class)
+                            .invoke(iatm, taskId, targetDisplayId);
+                    AppLogger.i(TAG, "moveTaskToDisplay taskId=" + taskId
+                            + " → display=" + targetDisplayId + " OK");
+
+                    if (targetDisplayId > 0) {
+                        Thread.sleep(300); // let WM settle after the display move
+
+                        // WINDOWING_MODE_FREEFORM = 5
+                        try {
+                            iAtmClass.getMethod("setTaskWindowingMode",
+                                    int.class, int.class, boolean.class)
+                                    .invoke(iatm, taskId, 5, true);
+                            AppLogger.i(TAG, "setTaskWindowingMode(FREEFORM) OK");
+                        } catch (Exception e) {
+                            AppLogger.w(TAG, "setTaskWindowingMode: " + e.getMessage());
+                        }
+                        // Apply the same inset bounds as applyClusterFreeformBounds()
+                        try {
+                            android.graphics.Rect bounds = new android.graphics.Rect(
+                                    getInsetH(), getInsetV(),
+                                    1920 - getInsetH(), 720 - getInsetV());
+                            iAtmClass.getMethod("resizeTask",
+                                    int.class, android.graphics.Rect.class, int.class)
+                                    .invoke(iatm, taskId, bounds, 1 /* RESIZE_MODE_FORCED */);
+                            AppLogger.i(TAG, "resizeTask " + bounds + " OK");
+                        } catch (Exception e) {
+                            AppLogger.w(TAG, "resizeTask: " + e.getMessage());
+                        }
+                    }
+
+                    mMainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            if (callback != null) callback.onResult(true);
+                        }
+                    });
+
+                } catch (Exception e) {
+                    AppLogger.e(TAG, "moveTaskToDisplay error", e);
+                    fallbackLaunch(packageName, targetDisplayId, callback);
+                }
+            }
+        }, "move-task-thread").start();
+    }
+
+    private void fallbackLaunch(final String packageName, final int targetDisplayId,
+                                 final LaunchCallback callback) {
+        mMainHandler.post(new Runnable() {
+            @Override public void run() {
+                if (targetDisplayId > 0) {
+                    launchOnDashboard(packageName, callback);
+                } else {
+                    boolean ok = mLauncher.launchOnMainDisplay(packageName);
+                    if (callback != null) callback.onResult(ok);
+                }
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Launches an app on the cluster.
@@ -202,9 +328,10 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
                         }
                         return;
                     }
-                    launchIntent.addFlags(0x10008000); // NEW_TASK | CLEAR_TASK
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
                     opts.setLaunchDisplayId(displayId);
+                    if (displayId > 0) applyClusterFreeformBounds(opts, displayId);
 
                     startActivityViaIAM(launchIntent, opts);
 
@@ -269,52 +396,42 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     }
 
     /**
-     * Launches an app on a specific displayId (e.g. VirtualDisplay preview from ClusterMirrorManager).
-     * Short delay (500ms) because the display is already ready (no Freedom activation needed).
-     * Uses the same IActivityManager reflection as launchOnDashboard().
+     * Applies WINDOWING_MODE_FREEFORM + inset bounds to ActivityOptions for cluster launches.
+     * Both @hide APIs are accessed via reflection.
+     * Inset (H/V from SettingsActivity prefs) avoids content clipping at the
+     * physical curved edges of the BYD Seal EU cluster screen.
      */
-    public void launchOnSpecificDisplay(final String packageName, final int displayId,
-            final LaunchCallback callback) {
-        AppLogger.i(TAG, "launchOnSpecificDisplay → " + packageName + " on display=" + displayId);
-        mMainHandler.postDelayed(new Runnable() {
-            @Override public void run() {
-                try {
-                    android.content.Intent launchIntent =
-                            getPackageManager().getLaunchIntentForPackage(packageName);
-                    if (launchIntent == null) {
-                        AppLogger.e(TAG, "No intent for " + packageName);
-                        if (callback != null) {
-                            mMainHandler.post(new Runnable() {
-                                @Override public void run() { callback.onResult(false); }
-                            });
-                        }
-                        return;
-                    }
-                    // MULTIPLE_TASK (not CLEAR_TASK): allows 2 independent instances
-                    // without killing the instance already launched on the cluster (Display 2)
-                    launchIntent.addFlags(0x10000000 | 0x08000000); // NEW_TASK | MULTIPLE_TASK
-                    android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
-                    opts.setLaunchDisplayId(displayId);
-
-                    startActivityViaIAM(launchIntent, opts);
-
-                    AppLogger.i(TAG, "launchOnSpecificDisplay succeeded → " + packageName
-                            + " on display=" + displayId);
-                    if (callback != null) {
-                        mMainHandler.post(new Runnable() {
-                            @Override public void run() { callback.onResult(true); }
-                        });
-                    }
-                } catch (Exception e) {
-                    AppLogger.e(TAG, "launchOnSpecificDisplay ERROR", e);
-                    if (callback != null) {
-                        mMainHandler.post(new Runnable() {
-                            @Override public void run() { callback.onResult(false); }
-                        });
-                    }
-                }
-            }
-        }, 500);
+    private void applyClusterFreeformBounds(android.app.ActivityOptions opts, int displayId) {
+        try {
+            java.lang.reflect.Method setWM = android.app.ActivityOptions.class
+                    .getDeclaredMethod("setLaunchWindowingMode", int.class);
+            setWM.setAccessible(true);
+            setWM.invoke(opts, 5); // WINDOWING_MODE_FREEFORM = 5
+        } catch (Exception e) {
+            AppLogger.w(TAG, "setLaunchWindowingMode unavailable: " + e.getMessage());
+        }
+        android.graphics.Point sz = new android.graphics.Point(1920, 720); // confirmed: fission_bg_xdjaVirtualSurface is 1920×720 (not 1080)
+        try {
+            android.hardware.display.DisplayManager dm =
+                    (android.hardware.display.DisplayManager) getSystemService(DISPLAY_SERVICE);
+            android.view.Display d = (dm != null) ? dm.getDisplay(displayId) : null;
+            if (d != null) d.getRealSize(sz);
+        } catch (Exception e) {
+            AppLogger.w(TAG, "getRealSize failed: " + e.getMessage());
+        }
+        android.graphics.Rect bounds = new android.graphics.Rect(
+                getInsetH(), getInsetV(),
+                sz.x - getInsetH(), sz.y - getInsetV());
+        try {
+            java.lang.reflect.Method setLB = android.app.ActivityOptions.class
+                    .getDeclaredMethod("setLaunchBounds", android.graphics.Rect.class);
+            setLB.setAccessible(true);
+            setLB.invoke(opts, bounds);
+            AppLogger.i(TAG, "cluster FREEFORM bounds=" + bounds
+                    + " display=" + displayId + " " + sz.x + "\u00d7" + sz.y);
+        } catch (Exception e) {
+            AppLogger.w(TAG, "setLaunchBounds unavailable: " + e.getMessage());
+        }
     }
 
     /**
@@ -344,13 +461,14 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
     public void restartProjection() {
         AppLogger.log(TAG, "restartProjection requested natively");
         if (mDisplayHelper != null) {
-            mDisplayHelper.start(false);
+            mDisplayHelper.start();
         }
     }
 
     /** Cleanly stops the projection (sendInfo(0) + stopService AutoDisplayService). */
     public void stopProjection() {
         AppLogger.log(TAG, "stopProjection requested");
+        AdbLocalClient.executeShell(this, "wm overscan reset -d 1");
         mProjectionActive = false;
         mDisplayHelper.stop();
         mLauncher.setDashboardDisplayId(-1);
@@ -365,6 +483,7 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
      */
     public void stopProjectionNoAdb() {
         AppLogger.log(TAG, "stopProjectionNoAdb requested (ADB already sent)");
+        AdbLocalClient.executeShell(this, "wm overscan reset -d 1");
         mProjectionActive = false;
         mDisplayHelper.stopWithoutAdb();
         mLauncher.setDashboardDisplayId(-1);
@@ -382,6 +501,24 @@ public class ClusterService extends Service implements DashboardDisplayHelper.Li
         mInputForwarder.setClusterDisplay(display);
         mInputForwarder.setClusterDisplayId(displayId);
         updateNotification("Cluster active — display " + displayId);
+
+        // Apply display-level insets via wm overscan so all apps launched on this display
+        // stay within the safe area [INSET_H, INSET_V, 1920-INSET_H, 720-INSET_V].
+        // This is the only approach that works on FLAG_PRESENTATION VirtualDisplays (Freedom)
+        // because apps there are not tracked by the standard WM task system.
+        // SAFETY GUARD: never apply overscan to the main display (id 0 or negative).
+        if (displayId > 0) {
+            final int insetH = getInsetH();
+            final int insetV = getInsetV();
+            AdbLocalClient.executeShell(this,
+                    "wm overscan " + insetH + "," + insetV
+                    + "," + insetH + "," + insetV
+                    + " -d " + displayId);
+            AppLogger.i(TAG, "wm overscan applied on display " + displayId
+                    + " inset=" + insetH + "," + insetV);
+        } else {
+            AppLogger.w(TAG, "wm overscan skipped: displayId=" + displayId + " (must be > 0)");
+        }
 
         if (mListener != null) {
             mListener.onClusterDisplayConnected(display, displayId);
