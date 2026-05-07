@@ -528,6 +528,15 @@ public class MainActivity extends AppCompatActivity
         final String appName = app.appName;
         final String pkgName = app.packageName;
 
+        // Guard: if this app is already on the cluster, just show the mirror — do NOT
+        // call moveTaskToDisplay() again (it would perturb setTaskWindowingMode/resizeTask
+        // and disrupt the cluster window, causing the mirror to flash/close).
+        if (pkgName != null && pkgName.equals(mCurrentDashboardPkg)) {
+            AppLogger.d(TAG, "onSendToDashboard: already on cluster — show mirror only");
+            startClusterMirror();
+            return;
+        }
+
         // If this app was on the main display, clear that state immediately
         if (pkgName != null && pkgName.equals(mMainDisplayPkg)) {
             mMainDisplayPkg = null;
@@ -826,51 +835,12 @@ public class MainActivity extends AppCompatActivity
      */
     private void startTrackingApp(String packageName) {
         stopTrackingApp();
-        try {
-            final int uid = getPackageManager().getApplicationInfo(packageName, 0).uid;
-            android.app.ActivityManager am =
-                    (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
-
-            // Resolve the hidden interface at runtime
-            Class<?> listenerIface = Class.forName(
-                    "android.app.ActivityManager$OnUidImportanceListener");
-            // IMPORTANCE_CACHED = 400; use literal to avoid SDK resolution issue
-            final int IMPORTANCE_CACHED = 400;
-
-            Object proxy = java.lang.reflect.Proxy.newProxyInstance(
-                    getClassLoader(),
-                    new Class[]{listenerIface},
-                    new java.lang.reflect.InvocationHandler() {
-                        @Override
-                        public Object invoke(Object p, java.lang.reflect.Method method,
-                                Object[] args) {
-                            if ("onUidImportance".equals(method.getName())
-                                    && args != null && args.length == 2) {
-                                int checkedUid  = (Integer) args[0];
-                                int importance  = (Integer) args[1];
-                                if (checkedUid == uid && importance > IMPORTANCE_CACHED) {
-                                    runOnUiThread(new Runnable() {
-                                        @Override public void run() { onExternalAppKill(); }
-                                    });
-                                }
-                            }
-                            return null;
-                        }
-                    });
-
-            java.lang.reflect.Method addMethod =
-                    android.app.ActivityManager.class.getMethod(
-                            "addOnUidImportanceListener", listenerIface, int.class);
-            addMethod.invoke(am, proxy, IMPORTANCE_CACHED);
-            mUidImportanceListener = proxy;
-            AppLogger.d(TAG, "trackApp uid=" + uid + " pkg=" + packageName);
-        } catch (PackageManager.NameNotFoundException e) {
-            AppLogger.w(TAG, "startTrackingApp: " + packageName + " not found");
-        } catch (Exception e) {
-            AppLogger.w(TAG, "startTrackingApp reflection failed: " + e.getMessage());
-        }
-        // Always start the /proc watchdog as a reliable fallback regardless of
-        // whether the OnUidImportanceListener registration succeeded.
+        // The OnUidImportanceListener has been removed: apps on a secondary VirtualDisplay
+        // (the cluster) are considered "background" by Android's process-importance model
+        // (the primary display has focus), so the listener fired immediately after launch,
+        // clearing all state and hiding the buttons/mirror button. The /proc watchdog is
+        // reliable regardless of which display the app is on: it checks process liveness
+        // via /proc/[pid]/cmdline, not window focus.
         startWatchdog(packageName);
     }
 
@@ -930,7 +900,10 @@ public class MainActivity extends AppCompatActivity
                 }, "watchdog-thread").start();
             }
         };
-        mScreenshotHandler.postDelayed(mWatchdogRunnable, WATCHDOG_INTERVAL_MS);
+        // 5-second grace period before the first tick: the app process may not yet
+        // have fully started on the secondary display (especially after a fresh launch
+        // with FLAG_ACTIVITY_CLEAR_TASK). Subsequent ticks use WATCHDOG_INTERVAL_MS.
+        mScreenshotHandler.postDelayed(mWatchdogRunnable, 5000);
         AppLogger.d(TAG, "watchdog started for " + packageName + " pid=" + mWatchdogPid);
     }
 
