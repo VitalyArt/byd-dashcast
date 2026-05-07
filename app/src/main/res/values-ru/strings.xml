@@ -6,8 +6,6 @@
     <string name="welcome_title">DashCast</string>
     <string name="welcome_subtitle">Контроллер панели приборов</string>
     <string name="welcome_select_lang">Выберите язык\nPlease select your language</string>
-    <string name="welcome_subtitle">Dashboard Controller</string>
-    <string name="welcome_select_lang">Choisissez votre langue\nPlease select your language</string>
     <string name="btn_lang_fr">🇫🇷  Français</string>
     <string name="btn_lang_en">🇬🇧  English</string>
     <string name="btn_lang_de">🇩🇪  Deutsch</string>
@@ -30,10 +28,6 @@
     <string name="btn_lang_es">🇪🇸  Español</string>
     <string name="btn_lang_ar">🇲🇦  العربية</string>
 
-    <string name="status_disconnected">Панель: не подключена</string>
-    <string name="btn_activate_cluster">Активировать проекцию</string>
-    <string name="btn_origin_cluster">Восстановить исходную панель</string>
-    <string name="mirror_placeholder">Активный экран на кластере ✓</string>
     <string name="btn_cluster_split">⬛⬛ Разделить</string>
 
     <!-- Cluster control panel -->
@@ -42,7 +36,6 @@
 
     <!-- item_app.xml -->
     <string name="btn_app_to_main">← Основной</string>
-    <string name="btn_app_to_main">← Главный</string>
     <string name="btn_app_to_cluster">→ Кластер</string>
 
     <!-- MainActivity — status texts -->
@@ -62,22 +55,13 @@
     <string name="toast_app_stopped">%1$s остановлено</string>
     <string name="toast_kill_failed">Не удалось завершить: %1$s</string>
     <string name="toast_no_app_cluster">На кластере нет приложения</string>
-    <string name="status_restoring_origin">Восстановление исходного кластера…</string>
-    <string name="status_dashboard_byd">Панель: дисплей BYD</string>
-    <string name="status_dashboard_app">Панель: %1$s</string>
 
-    <string name="toast_app_incompatible">%1$s: не установлено или несовместимо с мультиэкраном</string>
-    <string name="toast_restore_failed">Ошибка восстановления: %1$s</string>
-    <string name="toast_origin_failed">Ошибка восстановления исходного кластера: %1$s</string>
-    <string name="toast_kill_failed">Ошибка остановки: %1$s</string>
-    <string name="toast_no_app_cluster">Нет приложений на кластере</string>
     <string name="toast_cluster_type">Кластер: %1$s</string>
 
     <!-- MainActivity — overflow menu -->
     <string name="menu_settings">⚙️ Настройки</string>
     <string name="menu_diagnostic">🔧 Диагностика</string>
     <string name="menu_system_report">📋 Системный отчет</string>
-    <string name="menu_system_report">📋 Системный отчёт</string>
     <string name="menu_log">📜 Журналы</string>
     <string name="menu_language">🌐 Язык</string>
 
@@ -93,8 +77,6 @@
     <string name="split_full_screen">⬜ Полный экран</string>
     <string name="split_left">⬜⬛ Слева (50%%)</string>
     <string name="split_right">⬛⬜ Справа (50%%)</string>
-    <string name="split_left">⬜⬛ Слева (50%)</string>
-    <string name="split_right">⬛⬜ Справа (50%)</string>
 
     <string name="btn_send">Отправить</string>
 
@@ -136,23 +118,8 @@
     <string name="diag_size_restoring">⏳ Восстановление размера по умолчанию (cmd 30 + wm reset)…</string>
     <string name="diag_size_full_running">⏳ Диагностика размеров кластера…\nПробуем cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 секунд)</string>
     <string name="diag_sf_dumping">Выполняется dumpsys SurfaceFlinger…</string>
-    <string name="sysinfo_title">Системный отчёт BYD</string>
-    <string name="sysinfo_desc">Генерирует полный отчёт: дисплеи, API, пакеты BYD, разрешения, ADB. Сохраните и отправьте для отладки.</string>
-    <string name="btn_generate_report">▶ Создать отчёт</string>
-    <string name="sysinfo_hint">Нажмите «Создать отчёт» для начала.</string>
-    <string name="toast_report_saved">Отчёт сохранён:\n%1$s</string>
 
-    <string name="diag_share_result1_btn">Поделиться результатом ТЕСТА 1</string>
-    <string name="diag_share_result2_btn">Поделиться результатом ТЕСТА 2</string>
-    <string name="diag_share_result3_btn">Поделиться результатом ТЕСТА 3</string>
 
-    <string name="diag_adb_connecting">Подключение к localhost:5555…\n⏳ Всплывающее окно появится на экране — нажмите РАЗРЕШИТЬ.</string>
-    <string name="diag_adb_connected">✅ Соединение установлено\n\n</string>
-    <string name="diag_adb_failed">❌ Ошибка: %1$s\n\n→ Убедитесь, что отладка ADB по TCP включена\n  в Настройки → Разработчик → USB отладка</string>
-    <string name="diag_adb_test1_hint">→ Сначала выполните ТЕСТ 1 для авторизации ADB.</string>
-    <string name="diag_launching_display1">⏳ Запуск дисплея 1…</string>
-    <string name="diag_size_full_running">⏳ Диагностика размеров кластера…\nПроверка cmd=29 / cmd=30 / cmd=31 / wm size…\n(~8 секунд)</string>
-    <string name="diag_sf_dumping">Выполнение dumpsys SurfaceFlinger…</string>
     <string name="diag_sf_no_result">(нет результата — зеркало не зарегистрировано в SF)</string>
     <string name="diag_sf_error">Ошибка: %1$s</string>
     <string name="toast_sniffer_started">Сниффер запущен → %1$s</string>
@@ -175,14 +142,7 @@
     <string name="diag_btn_create_vd">Создать VirtualDisplay (внедрить daemon)</string>
     <string name="diag_s3_title">3. Свойства кластера</string>
     <string name="diag_s3_initial">Размер дисплея</string>
-    <string name="share_report_title">Поделиться отчётом…</string>
 
-    <string name="diag_s1_title">1. Локальный ADB (Обязательно)</string>
-    <string name="diag_s1_desc">Необходим для инъекции демонов и создания системного VirtualDisplay.</string>
-    <string name="diag_s2_title">2. Инъекция Daemon и Рендеринг</string>
-    <string name="diag_s2_desc">Запускает DashCastDaemon.java в app_process через ADB shell.</string>
-    <string name="diag_btn_create_vd">Создать VirtualDisplay (Инъекция Daemon)</string>
-    <string name="diag_s3_initial">Размер экрана</string>
     <string name="diag_s3_display1_initial">Восстановить дисплей кластера</string>
     <string name="diag_btn_restore_display">Восстановить дисплей</string>
     <string name="diag_sadas_title">ADAS Кластер (cmd 12 / 13)</string>
@@ -259,43 +219,7 @@
     <string name="diag_btn_cleanup">🗑️ Удалить trace-файлы</string>
     <string name="diag_cleanup_running">Очистка…</string>
     <string name="diag_cleanup_done">%1$d файл(ов) удалено — осталось места: %2$s</string>
-    <string name="diag_btn_jni_start_probe">Запустить + JNI Probe</string>
-    <string name="diag_btn_dump_mirror">Дамп Mirror Service</string>
-    <string name="diag_auto_display_desc">Запускает сервис Qt→VirtualDisplay напрямую.</string>
-    <string name="diag_btn_start_auto_display">ЗАПУСТИТЬ AutoDisplayService</string>
-    <string name="diag_btn_stop">СТОП</string>
-    <string name="diag_fission_title">Pipeline Fission (создание VirtualDisplay кластера)</string>
-    <string name="diag_fission_desc">Полная последовательность: sendInfo(30)+sendInfo(16) → Qt регистрирует Surface → am startservice AutoDisplayService → updateDisplay() → createVirtualDisplay.</string>
-    <string name="diag_btn_sendinf_java">☕ sendInfo Java прямой</string>
-    <string name="diag_s5_title">5. Системный сниффер (Обратная разработка)</string>
-    <string name="diag_s5_desc">Захватывает logcat (все релевантные теги) + периодические снимки dumpsys в экспортируемый файл.</string>
-    <string name="diag_btn_start">СТАРТ</string>
-    <string name="diag_btn_snapshot">Снимок сейчас</string>
-    <string name="diag_auto_stopped">СТОП: %1$s</string>
-    <string name="diag_jni_display_released">Дисплей освобождён. JNI зондирование…</string>
-    <string name="diag_jni_fatal">ФАТАЛЬНО: %1$s</string>
-    <string name="diag_jni_send16_failed">Ошибка отправки 16: %1$s</string>
-    <string name="diag_running">Выполнение диагностики…</string>
-    <string name="diag_daemon_launching">Запуск демона через adb local…</string>
-    <string name="diag_daemon_timeout">ТАЙМ-АУТ: ADB не ответил за %1$d с.</string>
-    <string name="diag_daemon_output">ВЫВОД ДЕМОНА: %1$s</string>
-    <string name="diag_apk_path_error">Ошибка пути APK: %1$s</string>
-    <string name="diag_fission_binder_starting">sendInfo Java прямой…</string>
-    <string name="diag_fission_no_display">❌ Нет fission display. Сначала запустите «Создать Fission Display».</string>
-    <string name="diag_fission_launching">Запуск на дисплее %1$d…</string>
-    <string name="diag_sniffer_init_failed">❌ Ошибка инициализации: %1$s</string>
-    <string name="toast_snapshot_done">Снимок добавлен в файл.</string>
-    <string name="diag_btn_size_restore">ВОССТАНОВИТЬ</string>
-    <string name="diag_btn_size_full">ПОЛНЫЙ ТЕСТ</string>
-    <string name="diag_btn_reset_main_overscan">⚠️ Сбросить overscan главного дисплея (display 0)</string>
-    <string name="diag_reset_main_overscan_done">Overscan главного дисплея сброшен — wm overscan reset -d 0</string>
     <!-- Section 7 — DiLink5 resize test -->
-    <string name="diag_s7_desc">Тестирует последовательность DiLink5: setTaskWindowingMode(4) → setTaskWindowingMode(5) → resizeTask(RESIZE_MODE_FORCED=3) через raw Binder на activity_task.</string>
-    <string name="diag_btn_resize_forced_only">▶ Только resizeTask FORCED=3</string>
-    <string name="diag_btn_resize_inspect_task">🔍 Проверить задачу кластера (windowing + bounds)</string>
-    <string name="diag_s6_desc">Удаляет файлы журналов и отчётов DashCast. Ключи ADB НЕ удаляются.</string>
-    <string name="diag_btn_cleanup">🗑️ Удалить файлы трассировки</string>
-    <string name="diag_cleanup_done">%1$d файл(ов) удалено — свободно: %2$s</string>
 
     <!-- SettingsActivity -->
     <string name="settings_header">Настройки</string>
@@ -307,9 +231,4 @@
     <string name="settings_btn_apply_overscan">Применить сейчас</string>
     <string name="settings_btn_reset_overscan">Сбросить (80 / 50)</string>
     <string name="settings_overscan_applied">✓ Применено — Л/П: %1$d px, В/Н: %2$d px</string>
-    <string name="settings_overscan_section_title">Поля экрана (overscan)</string>
-    <string name="settings_overscan_desc">Настройте поля для отображения контента на экране панели. Значения применяются при следующем запуске.</string>
-    <string name="settings_inset_h_label">Лево / Право:</string>
-    <string name="settings_inset_v_label">Верх / Низ:</string>
-    <string name="settings_overscan_applied">✓ Применено — Л/П: %1$d пкс, В/Н: %2$d пкс</string>
 </resources>
