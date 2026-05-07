@@ -115,8 +115,11 @@ public class MainActivity extends AppCompatActivity
     private Object   mUidImportanceListener = null;
     private String   mWatchdogPkg           = null;
     private int      mWatchdogPid           = -1;  // cached PID — avoids full /proc scan each tick
+    private boolean  mWatchdogEverHadPid    = false; // true once we confirmed a valid PID
+    private long     mWatchdogStartMs       = 0;     // SystemClock.elapsedRealtime() at start
     private Runnable mWatchdogRunnable       = null;
-    private static final int WATCHDOG_INTERVAL_MS = 2000;
+    private static final int WATCHDOG_INTERVAL_MS  = 2000;
+    private static final int WATCHDOG_STARTUP_TIMEOUT_MS = 30_000; // max wait for PID to appear
 
     // UI — barre statut
     private TextView tvDashboardStatus;
@@ -873,9 +876,11 @@ public class MainActivity extends AppCompatActivity
     private void startWatchdog(final String packageName) {
         stopWatchdog();
         mWatchdogPkg = packageName;
+        mWatchdogStartMs = android.os.SystemClock.elapsedRealtime();
         // Resolve the PID once so each tick only needs to check /proc/[pid] existence
         // instead of scanning the full /proc directory (~100-300 entries).
         mWatchdogPid = findPid(packageName);
+        if (mWatchdogPid > 0) mWatchdogEverHadPid = true;
         mWatchdogRunnable = new Runnable() {
             @Override public void run() {
                 if (mCurrentDashboardPkg == null || !packageName.equals(mWatchdogPkg)) return;
@@ -901,11 +906,32 @@ public class MainActivity extends AppCompatActivity
                             @Override public void run() {
                                 if (mCurrentDashboardPkg == null
                                         || !packageName.equals(mWatchdogPkg)) return;
-                                if (finalNewPid > 0) mWatchdogPid = finalNewPid; // track new PID
+                                if (finalNewPid > 0) {
+                                    mWatchdogPid = finalNewPid; // track new PID
+                                    mWatchdogEverHadPid = true;
+                                }
                                 if (!finalAlive) {
-                                    AppLogger.d(TAG, "watchdog: " + packageName
-                                            + " absent de /proc → cleanup");
-                                    onExternalAppKill();
+                                    if (!mWatchdogEverHadPid) {
+                                        // Never confirmed a valid PID — app may be slow to start
+                                        // or have a different process name in /proc. Keep polling
+                                        // until WATCHDOG_STARTUP_TIMEOUT_MS elapses.
+                                        long elapsed = android.os.SystemClock.elapsedRealtime()
+                                                - mWatchdogStartMs;
+                                        if (elapsed > WATCHDOG_STARTUP_TIMEOUT_MS) {
+                                            AppLogger.d(TAG, "watchdog: " + packageName
+                                                    + " never appeared in /proc after 30s — stop watching");
+                                            stopWatchdog();
+                                        } else {
+                                            AppLogger.d(TAG, "watchdog: " + packageName
+                                                    + " not yet in /proc (" + (elapsed/1000) + "s) — waiting");
+                                            mScreenshotHandler.postDelayed(
+                                                    mWatchdogRunnable, WATCHDOG_INTERVAL_MS);
+                                        }
+                                    } else {
+                                        AppLogger.d(TAG, "watchdog: " + packageName
+                                                + " absent de /proc → cleanup");
+                                        onExternalAppKill();
+                                    }
                                 } else {
                                     mScreenshotHandler.postDelayed(
                                             mWatchdogRunnable, WATCHDOG_INTERVAL_MS);
@@ -931,6 +957,8 @@ public class MainActivity extends AppCompatActivity
         }
         mWatchdogPkg = null;
         mWatchdogPid = -1;
+        mWatchdogEverHadPid = false;
+        mWatchdogStartMs = 0;
     }
 
     /**
