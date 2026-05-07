@@ -141,7 +141,7 @@
     <string name="diag_s3_display1_initial">Küme ekranını geri yükle</string>
     <string name="diag_btn_restore_display">Ekranı Geri Yükle</string>
     <string name="diag_sadas_title">ADAS Küme (cmd 12 / 13)</string>
-    <string name="diag_sadas_desc">Gösterge panelindeki ADAS katmanını göster veya gizle. sendInfo(1000, 12/13) komutları. Seal EU'da (2D küme) görünür etkisi yoktur, ADAS katmanı aktifken test edin.</string>
+    <string name="diag_sadas_desc">Gösterge panelindeki ADAS katmanını göster veya gizle. sendInfo(1000, 12/13) komutları. Seal EU\'da (2D küme) görünür etkisi yoktur, ADAS katmanı aktifken test edin.</string>
     <string name="diag_adas_initial">–</string>
     <string name="diag_adas_sending">Cmd %1$d gönderiliyor…</string>
     <string name="diag_btn_adas_show">显示 ADAS (cmd 12)</string>
